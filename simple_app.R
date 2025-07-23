@@ -13,7 +13,6 @@ suppressPackageStartupMessages({
     library(dplyr)
     library(readr)
     library(tidyr)
-    library(arrow)
     library(viridis)
     library(RColorBrewer)
     library(shinycssloaders)
@@ -37,8 +36,8 @@ load_atlas_data <- function(progress = NULL) {
     expression_data <- NULL
 
     # Load sample metadata
-    if (file.exists(file.path(base_path, "sample_metadata.feather"))) {
-        sample_data <- arrow::read_feather(file.path(base_path, "sample_metadata.feather"))
+    if (file.exists(file.path(base_path, "sample_metadata.rds"))) {
+        sample_data <- readRDS(file.path(base_path, "sample_metadata.rds"))
     }
 
     if (!is.null(progress)) {
@@ -46,8 +45,8 @@ load_atlas_data <- function(progress = NULL) {
     }
 
     # Load expression data (pre-computed VST or normalized counts)
-    if (file.exists(file.path(base_path, "expression_data.feather"))) {
-        expression_data <- arrow::read_feather(file.path(base_path, "expression_data.feather"))
+    if (file.exists(file.path(base_path, "expression_data.rds"))) {
+        expression_data <- readRDS(file.path(base_path, "expression_data.rds"))
     }
 
     if (!is.null(progress)) {

@@ -17,12 +17,12 @@ A streamlined R Shiny application for interactive exploration of RNA-seq express
 
 The application expects data in the following format:
 
-### Sample Metadata (`sample_metadata.csv` or `.feather`)
+### Sample Metadata (`expression_data.rds`)
 - `Name` or `PubName`: Sample identifier
 - `PubCelltype` or `Celltype`: Cell type classification
 - Additional metadata columns (DIV, Source, etc.)
 
-### Expression Data (`expression_data.csv` or `.feather`)
+### Expression Data (`sample_metadata.rds`)
 - `gene`: Gene identifier/symbol
 - `sample`: Sample identifier (matching metadata)
 - `expression`: Normalized expression value (VST recommended)
@@ -31,7 +31,8 @@ The application expects data in the following format:
 
 1. **Prepare Data**: Run the data gathering notebook to generate the DESeq2 object, then:
    ```r
-   source("prepare_test_data.R")
+   aws s3 cp s3://anatomicrna/sba-rnaseq_v4.0.0/Anatomic_Atlas/export/expression_data.rds expression_data.rds
+   aws s3 cp s3://anatomicrna/sba-rnaseq_v4.0.0/Anatomic_Atlas/export/sample_metadata.rds sample_metadata.rds
    ```
 
 2. **Launch Application**:
