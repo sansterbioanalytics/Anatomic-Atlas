@@ -10,29 +10,18 @@ library(parallel)
 library(foreach)
 library(doParallel)
 
-# Helper function to estimate memory requirements
-estimate_memory_requirements <- function(n_genes, n_samples) {
-    # Estimate memory for correlation matrix (genes x genes, 8 bytes per double)
-    correlation_matrix_gb <- (n_genes^2 * 8) / (1024^3)
-    
-    # Estimate memory for expression matrix (samples x genes, 8 bytes per double)  
-    expression_matrix_gb <- (n_samples * n_genes * 8) / (1024^3)
-    
-    # Total estimated memory (with some overhead)
-    total_memory_gb <- (correlation_matrix_gb + expression_matrix_gb) * 1.5
-    
-    return(list(
-        correlation_matrix_gb = correlation_matrix_gb,
-        expression_matrix_gb = expression_matrix_gb,
-        total_memory_gb = total_memory_gb,
-        use_streaming = total_memory_gb > 2  # Use streaming if > 2GB
-    ))
-}
-
 # 1. Calculate gene co-expression similarity (Parallelized Streaming Only)
-find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 10, 
+find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 25, 
                                  min_correlation = 0.6, data_type = "log2_cpm", 
-                                 max_genes_batch = 1000, use_parallel = TRUE) {
+                                 max_genes_batch = 1000, use_parallel = TRUE, log_func = NULL) {
+    
+    # Helper function for logging
+    log_message <- function(msg) {
+        message(msg)  # Still print to console
+        if (!is.null(log_func)) {
+            log_func(msg)
+        }
+    }
     
     # Filter expression data for the specified data type
     expr_filtered <- expression_data %>%
@@ -42,6 +31,7 @@ find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 10,
     available_query_genes <- intersect(query_genes, unique(expr_filtered$gene))
     
     if (length(available_query_genes) < 3) {
+        log_message(paste("Need at least 3 genes. Found only", length(available_query_genes), "of", length(query_genes)))
         return(list(
             similar_genes = data.frame(),
             query_genes_used = available_query_genes,
@@ -50,20 +40,22 @@ find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 10,
         ))
     }
     
-        # Get all unique genes and check dataset size
+    # Get all unique genes and check dataset size
     all_genes <- unique(expr_filtered$gene)
     n_genes <- length(all_genes)
     n_samples <- length(unique(expr_filtered$sample))
     
-    message(paste("Dataset:", n_genes, "genes,", n_samples, "samples. Using streaming approach."))
+    log_message(paste("Dataset:", n_genes, "genes,", n_samples, "samples. Using streaming approach."))
     
     # Always use streaming approach with optional parallelization
     if (use_parallel) {
+        log_message("Using parallel streaming approach")
         return(find_coexpressed_genes_streaming_parallel(expr_filtered, available_query_genes, 
-                                                       n_similar, min_correlation, max_genes_batch))
+                                                       n_similar, min_correlation, max_genes_batch, log_func))
     } else {
+        log_message("Using single-threaded streaming approach")
         return(find_coexpressed_genes_streaming(expr_filtered, available_query_genes, 
-                                              n_similar, min_correlation, max_genes_batch))
+                                              n_similar, min_correlation, max_genes_batch, log_func))
     }
 
     
@@ -147,8 +139,16 @@ find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 10,
 
 # Memory-efficient streaming correlation for large datasets
 find_coexpressed_genes_streaming <- function(expr_filtered, available_query_genes, 
-                                           n_similar = 5, min_correlation = 0.6, 
-                                           max_genes_batch = 1000) {
+                                           n_similar = 25, min_correlation = 0.6, 
+                                           max_genes_batch = 1000, log_func = NULL) {
+    
+    # Helper function for logging
+    log_message <- function(msg) {
+        message(msg)  # Still print to console
+        if (!is.null(log_func)) {
+            log_func(msg)
+        }
+    }
     
     # Get all genes and create batches to process
     all_genes <- unique(expr_filtered$gene)
@@ -168,7 +168,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
     n_batches <- ceiling(length(other_genes) / max_genes_batch)
     gene_batches <- split(other_genes, ceiling(seq_along(other_genes) / max_genes_batch))
     
-    message(paste("Processing", length(other_genes), "genes in", n_batches, "batches"))
+    log_message(paste("Processing", length(other_genes), "genes in", n_batches, "batches"))
     
     # Store results for each query gene
     similar_genes_list <- list()
@@ -177,7 +177,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
     for (query_idx in seq_along(available_query_genes)) {
         query_gene <- available_query_genes[query_idx]
         
-        message(paste("Processing query gene", query_idx, "of", length(available_query_genes), ":", query_gene))
+        log_message(paste("Processing query gene", query_idx, "of", length(available_query_genes), ":", query_gene))
         
         # Get expression data for the query gene
         query_expr <- expr_filtered %>%
@@ -195,7 +195,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
             batch_genes <- gene_batches[[batch_idx]]
             
             if (query_idx == 1) {  # Only show batch progress for first query gene
-                message(paste("  Processing batch", batch_idx, "of", n_batches, 
+                log_message(paste("  Processing batch", batch_idx, "of", n_batches, 
                              "(", length(batch_genes), "genes)"))
             }
             
@@ -244,6 +244,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
                 
             }, error = function(e) {
                 warning(paste("Error processing batch", batch_idx, "for gene", query_gene, ":", e$message))
+                log_message(paste("ERROR in batch", batch_idx, ":", e$message))
                 # Force cleanup even on error
                 suppressWarnings({
                     try(rm(batch_expr, batch_matrix, batch_correlations), silent = TRUE)
@@ -259,6 +260,8 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
         high_cor_genes <- gene_correlations[abs(gene_correlations) >= min_correlation]
         high_cor_genes <- sort(high_cor_genes, decreasing = TRUE)
         
+        log_message(paste("Found", length(high_cor_genes), "correlated genes for", query_gene))
+        
         # Store results for this query gene
         if (length(high_cor_genes) > 0) {
             similar_genes_list[[query_gene]] <- data.frame(
@@ -271,6 +274,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
     }
     
     if (length(similar_genes_list) == 0) {
+        log_message("No co-expressed genes found meeting the criteria")
         return(list(
             similar_genes = data.frame(),
             query_genes_used = available_query_genes,
@@ -296,6 +300,8 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
         ) %>%
         arrange(desc(avg_correlation)) %>%
         head(n_similar)
+    
+    log_message(paste("Final results: top", nrow(gene_summary), "co-expressed genes identified"))
     
     # Create a minimal correlation matrix for network visualization
     # Only include query genes and top similar genes
@@ -335,11 +341,19 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
 # Memory-efficient PARALLEL streaming correlation for large datasets
 find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_query_genes, 
                                                     n_similar = 5, min_correlation = 0.6, 
-                                                    max_genes_batch = 1000) {
+                                                    max_genes_batch = 1000, log_func = NULL) {
     
-    # Auto-detect number of cores
-    n_cores <- max(1, parallel::detectCores())
-    message(paste("Using", n_cores, "cores for parallel processing"))
+    # Helper function for logging
+    log_message <- function(msg) {
+        message(msg)  # Still print to console
+        if (!is.null(log_func)) {
+            log_func(msg)
+        }
+    }
+    
+    # Auto-detect number of cores (but limit to reasonable number)
+    n_cores <- min(8, max(1, parallel::detectCores()))  # max 8
+    log_message(paste("Using", n_cores, "cores for parallel processing"))
     
     # Get all genes and create batches to process
     all_genes <- unique(expr_filtered$gene)
@@ -349,22 +363,22 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
     n_genes <- length(other_genes)
     if (n_genes > 20000 && max_genes_batch > 500) {
         max_genes_batch <- 500
-        message("Very large dataset detected, reducing batch size to 500 for memory safety")
+        log_message("Very large dataset detected, reducing batch size to 500 for memory safety")
     } else if (n_genes > 50000 && max_genes_batch > 200) {
         max_genes_batch <- 200
-        message("Extremely large dataset detected, reducing batch size to 200 for memory safety")
+        log_message("Extremely large dataset detected, reducing batch size to 200 for memory safety")
     }
     
     # Create batches of genes to avoid memory issues
     n_batches <- ceiling(length(other_genes) / max_genes_batch)
     gene_batches <- split(other_genes, ceiling(seq_along(other_genes) / max_genes_batch))
     
-    message(paste("Processing", length(other_genes), "genes in", n_batches, "batches across", n_cores, "cores"))
+    log_message(paste("Processing", length(other_genes), "genes in", n_batches, "batches across", n_cores, "cores"))
     
-    # Helper function to process one query gene across all batches
-    process_query_gene <- function(query_idx, query_gene, gene_batches, expr_filtered, min_correlation, n_batches) {
+    # Helper function to process one query gene across all batches (sequential batches)
+    process_query_gene <- function(query_idx, query_gene) {
         
-        # Get expression data for the query gene
+        # Get expression data for the query gene from the parent environment
         query_expr <- expr_filtered %>%
             filter(gene == query_gene) %>%
             select(sample, expression) %>%
@@ -375,14 +389,9 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
         gene_correlations <- numeric()
         correlation_names <- character()
         
-        # Process each batch of genes
+        # Process each batch of genes sequentially within each query gene process
         for (batch_idx in seq_along(gene_batches)) {
             batch_genes <- gene_batches[[batch_idx]]
-            
-            # Show progress for first query gene only to avoid spam
-            if (query_idx == 1) {
-                message(paste("  Processing batch", batch_idx, "of", n_batches, "(", length(batch_genes), "genes)"))
-            }
             
             # Get expression matrix for this batch
             tryCatch({
@@ -428,12 +437,8 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
                 gc(verbose = FALSE)
                 
             }, error = function(e) {
-                warning(paste("Error processing batch", batch_idx, "for gene", query_gene, ":", e$message))
-                # Force cleanup even on error
-                suppressWarnings({
-                    try(rm(batch_expr, batch_matrix, batch_correlations), silent = TRUE)
-                    gc(verbose = FALSE)
-                })
+                # Silent error handling in parallel workers
+                return(NULL)
             })
         }
         
@@ -456,36 +461,65 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
         return(NULL)
     }
     
-    # Set up parallel cluster
-    cl <- parallel::makeCluster(n_cores)
-    on.exit(parallel::stopCluster(cl))
-    
-    # Export necessary objects to workers
-    parallel::clusterEvalQ(cl, {
-        library(dplyr)
-        library(tidyr)
-    })
-    
-    parallel::clusterExport(cl, c("expr_filtered", "gene_batches", "min_correlation", "n_batches"), envir = environment())
-    
-    # Process all query genes in parallel
-    # TODO: single-thread this part
-    message(paste("Processing", length(available_query_genes), "query genes sequentially"))
-    
-    # Process query genes one by one (single-threaded)
-    similar_genes_list <- list()
-    
-    for (i in seq_along(available_query_genes)) {
-        query_gene <- available_query_genes[i]
-        result <- process_query_gene(i, query_gene, gene_batches, expr_filtered, min_correlation, n_batches)
-        similar_genes_list[[query_gene]] <- result
+    # For small numbers of query genes, don't use parallel processing
+    if (length(available_query_genes) <= 2) {
+        log_message("Small number of query genes - using sequential processing")
+        similar_genes_list <- list()
+        for (i in seq_along(available_query_genes)) {
+            query_gene <- available_query_genes[i]
+            log_message(paste("Processing query gene", i, "of", length(available_query_genes), ":", query_gene))
+            result <- process_query_gene(i, query_gene)
+            similar_genes_list[[query_gene]] <- result
+        }
+    } else {
+        # Use parallel processing for multiple query genes
+        tryCatch({
+            # Set up parallel cluster
+            cl <- parallel::makeCluster(n_cores)
+            on.exit(parallel::stopCluster(cl), add = TRUE)
+            
+            # Export necessary objects to workers
+            parallel::clusterEvalQ(cl, {
+                library(dplyr)
+                library(tidyr)
+            })
+            
+            # Export the data and parameters (this may use significant memory)
+            parallel::clusterExport(cl, c("expr_filtered", "gene_batches", "min_correlation"), 
+                                   envir = environment())
+            
+            log_message("Starting parallel processing of query genes...")
+            
+            # Process query genes in parallel
+            results_list <- parallel::clusterMap(cl, process_query_gene, 
+                                                seq_along(available_query_genes), 
+                                                available_query_genes,
+                                                SIMPLIFY = FALSE)
+            
+            # Name the results
+            names(results_list) <- available_query_genes
+            similar_genes_list <- results_list
+            
+            log_message("Parallel processing completed")
+            
+        }, error = function(e) {
+            log_message(paste("Parallel processing failed, falling back to sequential:", e$message))
+            # Fallback to sequential processing
+            similar_genes_list <- list()
+            for (i in seq_along(available_query_genes)) {
+                query_gene <- available_query_genes[i]
+                log_message(paste("Processing query gene", i, "of", length(available_query_genes), ":", query_gene))
+                result <- process_query_gene(i, query_gene)
+                similar_genes_list[[query_gene]] <- result
+            }
+        })
     }
     
-    # Filter out NULL results and name the list
-    names(similar_genes_list) <- available_query_genes
+    # Filter out NULL results
     similar_genes_list <- similar_genes_list[!sapply(similar_genes_list, is.null)]
     
     if (length(similar_genes_list) == 0) {
+        log_message("No co-expressed genes found meeting the criteria")
         return(list(
             similar_genes = data.frame(),
             query_genes_used = available_query_genes,
@@ -511,6 +545,8 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
         ) %>%
         arrange(desc(avg_correlation)) %>%
         head(n_similar)
+    
+    log_message(paste("Final results: top", nrow(gene_summary), "co-expressed genes identified (parallel mode)"))
     
     # Create a minimal correlation matrix for network visualization
     # Only include query genes and top similar genes
@@ -775,9 +811,9 @@ create_coexpression_tab_ui <- function() {
                     
                     numericInput("n_similar_genes",
                         "Number of Similar Genes:",
-                        value = 5,
+                        value = 25,
                         min = 1,
-                        max = 20,
+                        max = 100,
                         step = 1
                     ),
                     

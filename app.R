@@ -660,6 +660,31 @@ ui <- dashboardPage(
             
             # Display selected genes count
             uiOutput("selected_genes_display"),
+            
+            # Gene pagination controls (only show when multiple genes selected)
+            conditionalPanel(
+                condition = "output.show_gene_pagination",
+                div(
+                    style = paste0("margin-top: ", app_theme$spacing_sm, ";"),
+                    h6("Expression Plot Controls", style = paste0("color: ", app_theme$text_white, "; margin-bottom: ", app_theme$spacing_xs, ";")),
+                    fluidRow(
+                        column(6, 
+                            actionButton("prev_genes", "← Prev", 
+                                       class = "btn-outline-primary btn-sm btn-block",
+                                       style = paste0("color: ", app_theme$text_white, "; border-color: ", app_theme$text_white, ";"))
+                        ),
+                        column(6,
+                            actionButton("next_genes", "Next →", 
+                                       class = "btn-outline-primary btn-sm btn-block",
+                                       style = paste0("color: ", app_theme$text_white, "; border-color: ", app_theme$text_white, ";"))
+                        )
+                    ),
+                    div(
+                        style = paste0("text-align: center; margin-top: ", app_theme$spacing_xs, "; color: ", app_theme$text_light, "; font-size: ", app_theme$font_size_small, ";"),
+                        textOutput("gene_pagination_info", inline = TRUE)
+                    )
+                )
+            ),
             br(),
 
             # Data type selection
@@ -726,6 +751,18 @@ ui <- dashboardPage(
             Shiny.addCustomMessageHandler('addProgressHandlers', function(data) {
                 // Any additional JavaScript setup can go here
             });
+            
+            // Auto-scroll coexpression log to bottom when updated
+            $(document).on('shiny:value', function(event) {
+                if (event.target.id === 'coexpression_live_log') {
+                    var container = document.getElementById('coexpression_log_container');
+                    if (container) {
+                        setTimeout(function() {
+                            container.scrollTop = container.scrollHeight;
+                        }, 100);
+                    }
+                }
+            });
         ")),
         fluidRow(
             # Main expression plot
@@ -738,7 +775,39 @@ ui <- dashboardPage(
                 tabsetPanel(
                     tabPanel(
                         "Expression Distribution",
-                        plotlyOutput("expression_histogram", height = "800px") %>% withSpinner()
+                        # Pagination controls
+                        fluidRow(
+                            column(12,
+                                div(
+                                    style = "margin-bottom: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;",
+                                    fluidRow(
+                                        column(3,
+                                            uiOutput("gene_pagination_info")
+                                        ),
+                                        column(3,
+                                            conditionalPanel(
+                                                condition = "output.show_genes_per_page",
+                                                div(
+                                                    style = "font-size: 12px;",
+                                                    selectInput("genes_per_page_selector", 
+                                                               "Genes per page:", 
+                                                               choices = c("5" = 5, "10" = 10, "15" = 15, "20" = 20), 
+                                                               selected = 10, 
+                                                               width = "120px")
+                                                )
+                                            )
+                                        ),
+                                        column(6,
+                                            div(
+                                                style = "text-align: right;",
+                                                uiOutput("gene_pagination_buttons")
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+                        plotlyOutput("expression_histogram", height = "750px") %>% withSpinner()
                     ),
                     tabPanel(
                         "Gene Set Heatmap",
@@ -751,10 +820,8 @@ ui <- dashboardPage(
                                 width = 3,
                                 wellPanel(
                                     h5("Co-Expression Controls", style = "margin-top: 0;"),
-                                    
                                     helpText("Uses currently selected genes to find co-expressed genes across the entire dataset.",
                                            class = "help-text"),
-                                    
                                     numericInput("min_correlation_coexpr",
                                         "Minimum Correlation:",
                                         value = 0.6,
@@ -762,15 +829,13 @@ ui <- dashboardPage(
                                         max = 1.0,
                                         step = 0.1
                                     ),
-                                    
                                     numericInput("n_similar_genes",
                                         "Number of Similar Genes:",
                                         value = 5,
                                         min = 1,
-                                        max = 20,
+                                        max = 250,
                                         step = 1
                                     ),
-                                    
                                     numericInput("max_genes_batch",
                                         "Batch Size:",
                                         value = 500,
@@ -778,38 +843,46 @@ ui <- dashboardPage(
                                         max = 2000,
                                         step = 100
                                     ),
-                                    
                                     checkboxInput("use_parallel",
                                         "Use parallel processing",
-                                        value = TRUE
+                                        value = FALSE
                                     ),
-                                    
                                     helpText("Analysis uses streaming mode with automatic memory management. Smaller batch sizes use less memory.",
                                            class = "help-text"),
-                                    
-                                    helpText("Parallel processing auto-detects available CPU cores for faster analysis.",
+                                    helpText("Parallel processing can help with very large datasets but may be unstable.",
                                            class = "help-text"),
-                                    
                                     br(),
-                                    
                                     actionButton("run_coexpression", 
                                                "Find Co-expressed Genes", 
-                                               class = "btn-primary btn-block"),
-                                    
-                                    br(),
-                                    
-                                    h6("Analysis Status", style = "font-weight: bold;"),
-                                    verbatimTextOutput("coexpression_status"),
-                                    
-                                    br(),
-                                    
-                                    h6("Found Genes", style = "font-weight: bold;"),
-                                    DT::dataTableOutput("coexpressed_genes_summary", height = "200px")
+                                               class = "btn-primary btn-block")
                                 )
                             ),
                             column(
                                 width = 9,
                                 tabsetPanel(
+                                    tabPanel(
+                                        "Analysis & Results",
+                                        fluidRow(
+                                            column(
+                                                width = 4,
+                                                h6("Analysis Progress", style = "font-weight: bold;"),
+                                                div(
+                                                    id = "coexpression_log_container",
+                                                    style = paste0("height: 300px; overflow-y: auto; border: 1px solid ", app_theme$border_light, "; border-radius: ", app_theme$radius_sm, "; padding: ", app_theme$spacing_sm, "; background-color: ", app_theme$background_light, ";"),
+                                                    verbatimTextOutput("coexpression_live_log")
+                                                ),
+                                                br(),
+                                                h6("Found Genes Summary", style = "font-weight: bold;"),
+                                                DT::dataTableOutput("coexpressed_genes_summary", height = "250px")
+                                            ),
+                                            column(
+                                                width = 8,
+                                                h6("Co-expressed Genes Details", style = "margin-top: 0px;"),
+                                                DT::dataTableOutput("coexpression_detailed_table", height = "600px") %>%
+                                                    shinycssloaders::withSpinner()
+                                            )
+                                        )
+                                    ),
                                     tabPanel(
                                         "Expression Heatmap",
                                         plotlyOutput("coexpression_heatmap", height = "700px") %>% 
@@ -818,12 +891,6 @@ ui <- dashboardPage(
                                     tabPanel(
                                         "Correlation Network",
                                         networkD3::forceNetworkOutput("coexpression_network", height = "700px") %>%
-                                            shinycssloaders::withSpinner()
-                                    ),
-                                    tabPanel(
-                                        "Detailed Results",
-                                        h6("Co-expressed Genes Details", style = "margin-top: 10px;"),
-                                        DT::dataTableOutput("coexpression_detailed_table") %>%
                                             shinycssloaders::withSpinner()
                                     )
                                 )
@@ -887,7 +954,9 @@ server <- function(input, output, session) {
         expression_data = NULL,
         contrast_data = NULL,
         uploaded_genes = NULL,
-        data_loaded = FALSE
+        data_loaded = FALSE,
+        gene_page = 1,  # Current page for gene pagination
+        genes_per_page = 10  # Number of genes per page
     )
 
     # Load data with progress indication
@@ -1005,6 +1074,119 @@ server <- function(input, output, session) {
         }
     })
     
+    # Reactive expression for genes on current page (for expression plots)
+    current_page_genes <- reactive({
+        all_genes <- current_genes()
+        if (is.null(all_genes) || length(all_genes) == 0) {
+            return(NULL)
+        }
+        
+        # Calculate pagination
+        total_genes <- length(all_genes)
+        start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
+        end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+        
+        if (start_idx > total_genes) {
+            # Reset to page 1 if current page is out of bounds
+            values$gene_page <- 1
+            start_idx <- 1
+            end_idx <- min(values$genes_per_page, total_genes)
+        }
+        
+        return(all_genes[start_idx:end_idx])
+    })
+    
+    # Observer to reset page when gene selection changes
+    observe({
+        current_genes()  # Trigger when genes change
+        values$gene_page <- 1  # Reset to first page
+    })
+    
+    # Pagination controls
+    observeEvent(input$next_gene_page, {
+        all_genes <- current_genes()
+        if (!is.null(all_genes) && length(all_genes) > 0) {
+            max_pages <- ceiling(length(all_genes) / values$genes_per_page)
+            if (values$gene_page < max_pages) {
+                values$gene_page <- values$gene_page + 1
+            }
+        }
+    })
+    
+    observeEvent(input$prev_gene_page, {
+        if (values$gene_page > 1) {
+            values$gene_page <- values$gene_page - 1
+        }
+    })
+    
+    # Pagination info UI
+    output$gene_pagination_info <- renderUI({
+        all_genes <- current_genes()
+        if (is.null(all_genes) || length(all_genes) <= values$genes_per_page) {
+            return(span("", style = "color: #666;"))
+        }
+        
+        total_genes <- length(all_genes)
+        max_pages <- ceiling(total_genes / values$genes_per_page)
+        start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
+        end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+        
+        span(
+            paste0("Showing genes ", start_idx, "-", end_idx, " of ", total_genes, 
+                   " (Page ", values$gene_page, " of ", max_pages, ")"),
+            style = "color: #666; font-size: 12px;"
+        )
+    })
+    
+    # Pagination buttons UI
+    output$gene_pagination_buttons <- renderUI({
+        all_genes <- current_genes()
+        if (is.null(all_genes) || length(all_genes) <= values$genes_per_page) {
+            return(NULL)  # Don't show buttons if pagination not needed
+        }
+        
+        max_pages <- ceiling(length(all_genes) / values$genes_per_page)
+        
+        # Determine button states
+        prev_disabled <- values$gene_page <= 1
+        next_disabled <- values$gene_page >= max_pages
+        
+        tagList(
+            actionButton("prev_gene_page", "← Previous", 
+                        class = paste("btn-sm", if(prev_disabled) "disabled" else "btn-default"), 
+                        style = paste("margin-right: 5px;", 
+                                    if(prev_disabled) "opacity: 0.5; cursor: not-allowed;" else ""),
+                        disabled = prev_disabled),
+            actionButton("next_gene_page", "Next →", 
+                        class = paste("btn-sm", if(next_disabled) "disabled" else "btn-default"),
+                        style = if(next_disabled) "opacity: 0.5; cursor: not-allowed;" else "",
+                        disabled = next_disabled)
+        )
+    })
+    
+    # Observer for genes per page changes
+    observeEvent(input$genes_per_page_selector, {
+        if (!is.null(input$genes_per_page_selector)) {
+            values$genes_per_page <- as.numeric(input$genes_per_page_selector)
+            values$gene_page <- 1  # Reset to first page when changing page size
+        }
+    })
+    
+    # Output to control conditional panel for genes per page selector
+    output$show_genes_per_page <- reactive({
+        all_genes <- current_genes()
+        !is.null(all_genes) && length(all_genes) > 5
+    })
+    outputOptions(output, "show_genes_per_page", suspendWhenHidden = FALSE)
+    
+    # Observer to enable/disable pagination buttons
+    observe({
+        # This observer will just trigger updates to the UI elements
+        # The actual enable/disable logic will be in the UI rendering
+        all_genes <- current_genes()
+        values$gene_page  # Also trigger on page changes
+    })
+    
     # Display selected genes information
     output$selected_genes_display <- renderUI({
         genes <- current_genes()
@@ -1103,28 +1285,16 @@ server <- function(input, output, session) {
                 ))
         }
 
-        # Use unified gene selection
-        selected_genes <- current_genes()
+        # Use current page genes for plotting (paginated)
+        genes_to_plot <- current_page_genes()
         
         # Only plot if genes are selected
-        if (is.null(selected_genes) || length(selected_genes) == 0) {
+        if (is.null(genes_to_plot) || length(genes_to_plot) == 0) {
             return(plotly_empty() %>%
                 add_annotations(
                     text = "Select genes to display expression plots",
                     showarrow = FALSE
                 ))
-        }
-
-        # Limit to maximum 10 genes for performance
-        genes_to_plot <- head(selected_genes, 10)
-        if (length(selected_genes) > 10) {
-            showNotification(
-                paste(
-                    "Limited to first 10 genes for performance. Selected:",
-                    paste(genes_to_plot, collapse = ", ")
-                ),
-                type = "warning", duration = 3000
-            )
         }
 
         # Create Y-axis label based on data type
@@ -1147,12 +1317,33 @@ server <- function(input, output, session) {
                 ))
         }
 
-        # Create subtitle with data type information
+        # Create subtitle with data type information and pagination
         data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-        subtitle_text <- paste0(
-            "Expression distribution by group for: ", paste(genes_to_plot, collapse = ", "),
-            " (Data: ", data_type_label, ")"
+        all_selected_genes <- current_genes()
+        
+        subtitle_parts <- c(
+            paste0("Data: ", data_type_label)
         )
+        
+        # Add pagination info if we have multiple pages
+        if (!is.null(all_selected_genes) && length(all_selected_genes) > values$genes_per_page) {
+            total_genes <- length(all_selected_genes)
+            max_pages <- ceiling(total_genes / values$genes_per_page)
+            start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
+            end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+            
+            subtitle_parts <- c(
+                subtitle_parts,
+                paste0("Showing ", length(genes_to_plot), " of ", total_genes, " genes (Page ", values$gene_page, "/", max_pages, ")")
+            )
+        } else if (!is.null(genes_to_plot)) {
+            subtitle_parts <- c(
+                subtitle_parts,
+                paste0("Genes: ", paste(genes_to_plot, collapse = ", "))
+            )
+        }
+        
+        subtitle_text <- paste(subtitle_parts, collapse = " | ")
 
         # Create boxplot, faceted by gene
         plot_theme <- get_plot_theme(app_theme)
@@ -2124,6 +2315,22 @@ server <- function(input, output, session) {
     # Co-Expression Analysis Server Logic
     # =============================================================================
     
+    # Reactive values for co-expression analysis
+    coexpression_log <- reactiveVal(character(0))
+    coexpression_running <- reactiveVal(FALSE)
+    
+    # Function to add messages to the live log
+    add_coexpression_log <- function(message) {
+        timestamp <- format(Sys.time(), "%H:%M:%S")
+        log_entry <- paste0("[", timestamp, "] ", message)
+        current_log <- coexpression_log()
+        # Keep only last 50 entries to prevent memory issues
+        if (length(current_log) >= 50) {
+            current_log <- current_log[-1]
+        }
+        coexpression_log(c(current_log, log_entry))
+    }
+    
     # Reactive for co-expression analysis
     coexpression_results <- eventReactive(input$run_coexpression, {
         # Use unified gene selection
@@ -2132,40 +2339,87 @@ server <- function(input, output, session) {
         req(selected_genes, values$expression_data)
         
         if (length(selected_genes) < 3) {
+            add_coexpression_log("ERROR: Please select at least 3 genes for co-expression analysis")
             showNotification("Please select at least 3 genes for co-expression analysis", 
                             type = "warning", duration = 5)
             return(NULL)
         }
         
-        withProgress(message = "Finding co-expressed genes...", value = 0, {
-            
-            incProgress(0.3, detail = "Calculating correlations...")
-            
-            results <- find_coexpressed_genes(
+        # Set running status and clear previous log
+        coexpression_running(TRUE)
+        coexpression_log(character(0))
+        
+        add_coexpression_log(paste("Starting co-expression analysis with", length(selected_genes), "query genes"))
+        add_coexpression_log(paste("Parameters: min_correlation =", input$min_correlation_coexpr, 
+                                  ", n_similar =", input$n_similar_genes, 
+                                  ", batch_size =", input$max_genes_batch))
+        add_coexpression_log(paste("Using parallel processing:", input$use_parallel))
+        add_coexpression_log(paste("Data type:", input$data_type))
+        
+        # Get dataset info for progress message
+        total_genes <- length(unique(values$expression_data$gene))
+        add_coexpression_log(paste("Dataset contains", format(total_genes, big.mark = ","), "genes"))
+        
+        add_coexpression_log("Starting analysis...")
+        
+        # Use live log for progress instead of withProgress modal
+        add_coexpression_log("Step 1/3: Calculating correlations...")
+        
+        results <- tryCatch({
+            find_coexpressed_genes(
                 expression_data = values$expression_data,
                 query_genes = selected_genes,
                 n_similar = input$n_similar_genes %||% 5,
                 min_correlation = input$min_correlation_coexpr %||% 0.6,
                 data_type = input$data_type,
                 max_genes_batch = input$max_genes_batch %||% 1000,
-                use_parallel = input$use_parallel %||% TRUE
+                use_parallel = input$use_parallel %||% FALSE,
+                log_func = add_coexpression_log
             )
-            
-            incProgress(0.7, detail = "Processing results...")
-            
-            return(results)
+        }, error = function(e) {
+            add_coexpression_log(paste("ERROR:", e$message))
+            coexpression_running(FALSE)
+            return(NULL)
         })
-    })
-    
-    # Status output
-    output$coexpression_status <- renderText({
-        results <- coexpression_results()
         
-        if (is.null(results)) {
-            return("No analysis run yet")
+        add_coexpression_log("Step 2/3: Processing results...")
+        
+        if (!is.null(results) && !is.null(results$similar_genes) && nrow(results$similar_genes) > 0) {
+            add_coexpression_log(paste("Step 3/3: Analysis completed successfully -", nrow(results$similar_genes), "co-expressed genes found"))
+        } else {
+            add_coexpression_log("Step 3/3: Analysis completed - no co-expressed genes found meeting the criteria")
         }
         
-        return(results$message)
+        # Reset running status
+        coexpression_running(FALSE)
+        
+        return(results)
+    })
+    
+    # Observer to update button state based on analysis status
+    observe({
+        if (coexpression_running()) {
+            updateActionButton(session, "run_coexpression", 
+                             label = "Analysis Running...", 
+                             icon = icon("spinner", class = "fa-spin"))
+        } else {
+            updateActionButton(session, "run_coexpression", 
+                             label = "Find Co-expressed Genes",
+                             icon = NULL)
+        }
+    })
+    
+    # Live log output
+    output$coexpression_live_log <- renderText({
+        log_entries <- coexpression_log()
+        if (length(log_entries) == 0) {
+            if (coexpression_running()) {
+                return("Analysis starting...")
+            } else {
+                return("Ready to run analysis...")
+            }
+        }
+        paste(log_entries, collapse = "\n")
     })
     
     # Summary table of found genes
@@ -2186,7 +2440,7 @@ server <- function(input, output, session) {
                 pageLength = 10,
                 dom = "t",
                 ordering = FALSE,
-                scrollY = "150px",
+                scrollY = "200px",
                 scrollCollapse = TRUE
             ),
             rownames = FALSE,
