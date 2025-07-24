@@ -2,7 +2,11 @@
 # Anatomic RNA Atlas - Simple Interactive Visualization Application
 # Single-file R Shiny Application for Contrast Analysis
 # =============================================================================
-# TODO: Review package installation method of rstudio connect apps
+# TODO: title of the web nav is <div> logo class something, should be Anatomic Atlas
+# TODO: small visual tweaks like 
+# TODO: error on startup RNA89s
+
+
 # Load required libraries
 suppressPackageStartupMessages({
     library(shiny)
@@ -11,12 +15,18 @@ suppressPackageStartupMessages({
     library(plotly)
     library(ggplot2)
     library(dplyr)
+    library(rlang)
     library(readr)
     library(tidyr)
     library(viridis)
     library(RColorBrewer)
     library(shinycssloaders)
+    library(corrr)
+    library(networkD3)
 })
+
+# Source co-expression analysis functions
+source("coexpression_analysis.R")
 
 # =============================================================================
 # Data Loading Functions
@@ -731,6 +741,92 @@ ui <- dashboardPage(
                             column(
                                 width = 9,
                                 plotlyOutput("gene_set_heatmap", height = "500px") %>% withSpinner()
+                            )
+                        )
+                    ),
+                    tabPanel(
+                        "Co-Expression Analysis",
+                        fluidRow(
+                            column(
+                                width = 3,
+                                wellPanel(
+                                    h5("Co-Expression Controls", style = "margin-top: 0;"),
+                                    
+                                    helpText("Select at least 3 genes to find co-expressed genes across the entire dataset.",
+                                           class = "help-text"),
+                                    
+                                    numericInput("min_correlation_coexpr",
+                                        "Minimum Correlation:",
+                                        value = 0.6,
+                                        min = 0.1,
+                                        max = 1.0,
+                                        step = 0.1
+                                    ),
+                                    
+                                    numericInput("n_similar_genes",
+                                        "Number of Similar Genes:",
+                                        value = 5,
+                                        min = 1,
+                                        max = 20,
+                                        step = 1
+                                    ),
+                                    
+                                    numericInput("max_genes_batch",
+                                        "Batch Size:",
+                                        value = 1000,
+                                        min = 100,
+                                        max = 5000,
+                                        step = 100
+                                    ),
+                                    
+                                    checkboxInput("use_parallel",
+                                        "Use parallel processing",
+                                        value = TRUE
+                                    ),
+                                    
+                                    helpText("Analysis uses streaming mode with automatic memory management. Smaller batch sizes use less memory.",
+                                           class = "help-text"),
+                                    
+                                    helpText("Parallel processing auto-detects available CPU cores for faster analysis.",
+                                           class = "help-text"),
+                                    
+                                    br(),
+                                    
+                                    actionButton("run_coexpression", 
+                                               "Find Co-expressed Genes", 
+                                               class = "btn-primary btn-block"),
+                                    
+                                    br(),
+                                    
+                                    h6("Analysis Status", style = "font-weight: bold;"),
+                                    verbatimTextOutput("coexpression_status"),
+                                    
+                                    br(),
+                                    
+                                    h6("Found Genes", style = "font-weight: bold;"),
+                                    DT::dataTableOutput("coexpressed_genes_summary", height = "200px")
+                                )
+                            ),
+                            column(
+                                width = 9,
+                                tabsetPanel(
+                                    tabPanel(
+                                        "Expression Heatmap",
+                                        plotlyOutput("coexpression_heatmap", height = "450px") %>% 
+                                            shinycssloaders::withSpinner()
+                                    ),
+                                    tabPanel(
+                                        "Correlation Network",
+                                        networkD3::forceNetworkOutput("coexpression_network", height = "450px") %>%
+                                            shinycssloaders::withSpinner()
+                                    ),
+                                    tabPanel(
+                                        "Detailed Results",
+                                        h6("Co-expressed Genes Details", style = "margin-top: 10px;"),
+                                        DT::dataTableOutput("coexpression_detailed_table") %>%
+                                            shinycssloaders::withSpinner()
+                                    )
+                                )
                             )
                         )
                     )
@@ -1897,6 +1993,147 @@ server <- function(input, output, session) {
             ggsave(file, plot = p, width = 12, height = 8, dpi = 300)
         }
     )
+    
+    # =============================================================================
+    # Co-Expression Analysis Server Logic
+    # =============================================================================
+    
+    # Reactive for co-expression analysis
+    coexpression_results <- eventReactive(input$run_coexpression, {
+        req(input$selected_genes, values$expression_data)
+        
+        if (length(input$selected_genes) < 3) {
+            showNotification("Please select at least 3 genes for co-expression analysis", 
+                            type = "warning", duration = 5)
+            return(NULL)
+        }
+        
+        withProgress(message = "Finding co-expressed genes...", value = 0, {
+            
+            incProgress(0.3, detail = "Calculating correlations...")
+            
+            results <- find_coexpressed_genes(
+                expression_data = values$expression_data,
+                query_genes = input$selected_genes,
+                n_similar = input$n_similar_genes %||% 5,
+                min_correlation = input$min_correlation_coexpr %||% 0.6,
+                data_type = input$data_type,
+                max_genes_batch = input$max_genes_batch %||% 1000,
+                use_parallel = input$use_parallel %||% TRUE
+            )
+            
+            incProgress(0.7, detail = "Processing results...")
+            
+            return(results)
+        })
+    })
+    
+    # Status output
+    output$coexpression_status <- renderText({
+        results <- coexpression_results()
+        
+        if (is.null(results)) {
+            return("No analysis run yet")
+        }
+        
+        return(results$message)
+    })
+    
+    # Summary table of found genes
+    output$coexpressed_genes_summary <- DT::renderDataTable({
+        results <- coexpression_results()
+        
+        if (is.null(results) || nrow(results$similar_genes) == 0) {
+            return(data.frame(Message = "No results"))
+        }
+        
+        summary_table <- results$similar_genes %>%
+            select(Gene = similar_gene, `Avg Corr` = avg_correlation) %>%
+            mutate(`Avg Corr` = round(`Avg Corr`, 3))
+        
+        DT::datatable(
+            summary_table,
+            options = list(
+                pageLength = 10,
+                dom = "t",
+                ordering = FALSE,
+                scrollY = "150px",
+                scrollCollapse = TRUE
+            ),
+            rownames = FALSE,
+            selection = "none"
+        ) %>%
+            DT::formatStyle("Gene", fontWeight = "bold")
+    })
+    
+    # Co-expression heatmap
+    output$coexpression_heatmap <- renderPlotly({
+        results <- coexpression_results()
+        
+        if (is.null(results) || nrow(results$similar_genes) == 0) {
+            return(plotly_empty() %>%
+                add_annotations(
+                    text = "Run co-expression analysis to see heatmap",
+                    showarrow = FALSE
+                ))
+        }
+        
+        create_coexpression_heatmap(
+            expression_data = values$expression_data,
+            query_genes = results$query_genes_used,
+            similar_genes = results$similar_genes$similar_gene,
+            data_type = input$data_type,
+            sample_metadata = values$sample_data
+        )
+    })
+    
+    # Co-expression network
+    output$coexpression_network <- networkD3::renderForceNetwork({
+        results <- coexpression_results()
+        
+        if (is.null(results) || nrow(results$similar_genes) == 0) {
+            return(NULL)
+        }
+        
+        create_coexpression_network(
+            correlation_matrix = results$correlation_matrix,
+            query_genes = results$query_genes_used,
+            similar_genes = results$similar_genes$similar_gene,
+            min_correlation = input$min_correlation_coexpr %||% 0.6
+        )
+    })
+    
+    # Detailed results table
+    output$coexpression_detailed_table <- DT::renderDataTable({
+        results <- coexpression_results()
+        
+        if (is.null(results)) {
+            return(data.frame(Message = "No analysis run yet"))
+        }
+        
+        detailed_table <- create_correlation_table(results)
+        
+        DT::datatable(
+            detailed_table,
+            options = list(
+                pageLength = 15,
+                scrollX = TRUE,
+                dom = "Bfrtip",
+                buttons = c("copy", "csv", "excel")
+            ),
+            rownames = FALSE,
+            extensions = "Buttons",
+            selection = "none"
+        ) %>%
+            DT::formatStyle("Gene", fontWeight = "bold") %>%
+            DT::formatStyle(
+                c("Avg Correlation", "Max Correlation", "Min Correlation"),
+                backgroundColor = DT::styleInterval(
+                    c(0.7, 0.8, 0.9), 
+                    c("white", "#e8f5e8", "#d4edda", "#c3e6cb")
+                )
+            )
+    })
 }
 
 # Run the application

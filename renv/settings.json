@@ -1,7 +1,7 @@
 {
   "bioconductor.version": null,
   "external.libraries": [
-    "/opt/conda/envs/atlas/lib/R/library"
+    "/home/ash/mambaforge-pypy3/envs/atlas/lib/R/library"
   ],
   "ignored.packages": [],
   "package.dependency.fields": [
