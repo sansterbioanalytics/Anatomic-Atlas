@@ -156,13 +156,6 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
     
     # Adjust batch size based on dataset size to avoid memory issues
     n_genes <- length(other_genes)
-    # if (n_genes > 20000 && max_genes_batch > 500) {
-    #     max_genes_batch <- 500
-    #     message("Very large dataset detected, reducing batch size to 500 for memory safety")
-    # } else if (n_genes > 50000 && max_genes_batch > 200) {
-    #     max_genes_batch <- 200
-    #     message("Extremely large dataset detected, reducing batch size to 200 for memory safety")
-    # }
     
     # Create batches of genes to avoid memory issues
     n_batches <- ceiling(length(other_genes) / max_genes_batch)
@@ -361,14 +354,7 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
     
     # Adjust batch size based on dataset size to avoid memory issues
     n_genes <- length(other_genes)
-    if (n_genes > 20000 && max_genes_batch > 500) {
-        max_genes_batch <- 500
-        log_message("Very large dataset detected, reducing batch size to 500 for memory safety")
-    } else if (n_genes > 50000 && max_genes_batch > 200) {
-        max_genes_batch <- 200
-        log_message("Extremely large dataset detected, reducing batch size to 200 for memory safety")
-    }
-    
+
     # Create batches of genes to avoid memory issues
     n_batches <- ceiling(length(other_genes) / max_genes_batch)
     gene_batches <- split(other_genes, ceiling(seq_along(other_genes) / max_genes_batch))
@@ -813,7 +799,7 @@ create_coexpression_tab_ui <- function() {
                         "Number of Similar Genes:",
                         value = 25,
                         min = 1,
-                        max = 100,
+                        max = 250,
                         step = 1
                     ),
                     

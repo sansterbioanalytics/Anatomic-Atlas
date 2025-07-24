@@ -1,11 +1,10 @@
 # =============================================================================
-# Anatomic RNA Atlas - Simple Interactive Visualization Application
-# Single-file R Shiny Application for Contrast Analysis
+# Anatomic RNA Atlas - Interactive Visualization Application
+# Modular Shiny Application for RNA Expression Analysis
 # =============================================================================
 # TODO: title of the web nav is <div> logo class something, should be Anatomic Atlas
 # TODO: small visual tweaks like 
 # TODO: error on startup RNA89s
-
 
 # Load required libraries
 suppressPackageStartupMessages({
@@ -25,567 +24,13 @@ suppressPackageStartupMessages({
     library(networkD3)
 })
 
-# Source co-expression analysis functions
-source("coexpression_analysis.R")
-
-# =============================================================================
-# Data Loading Functions
-# =============================================================================
-
-# Function to load pre-computed data with progress
-load_atlas_data <- function(progress = NULL) {
-    # Need to update this to Rstudio connect data-safe uri
-    base_path <- "./"
-
-    if (!is.null(progress)) {
-        progress$set(message = "Loading sample metadata...", value = 0.2)
-    }
-
-    # Try to load from different possible formats
-    sample_data <- NULL
-    expression_data <- NULL
-
-    # Load sample metadata
-    if (file.exists(file.path(base_path, "sample_metadata.rds"))) {
-        sample_data <- readRDS(file.path(base_path, "sample_metadata.rds"))
-    }
-
-    if (!is.null(progress)) {
-        progress$set(message = "Loading expression data...", value = 0.5)
-    }
-
-    # Load expression data (pre-computed VST or normalized counts)
-    if (file.exists(file.path(base_path, "expression_data.rds"))) {
-        expression_data <- readRDS(file.path(base_path, "expression_data.rds"))
-    }
-
-    if (!is.null(progress)) {
-        progress$set(message = "Finalizing data setup...", value = 1.0)
-    }
-
-    return(list(
-        sample_data = sample_data,
-        expression_data = expression_data
-    ))
-}
-
-# Function to load gene sets
-load_gene_sets <- function() {
-    gene_set_path <- "./"
-    gene_sets <- list()
-
-    # Define the gene set files
-    gene_set_files <- c(
-        "TRP_channels.csv",
-        "Sodium_Channels.csv",
-        "Calcium_Channels.csv",
-        "Ion_Channels.csv",
-        "Price_Neuropeptides.csv",
-        "Price_GPCRs.csv",
-        "Cell_Adhesion_Molecules.csv"
-    )
-
-    for (file in gene_set_files) {
-        file_path <- file.path(gene_set_path, file)
-        if (file.exists(file_path)) {
-            name <- gsub("\\.csv$", "", file)
-            name <- gsub("_", " ", name) # Replace underscores with spaces
-            gene_sets[[name]] <- readr::read_csv(file_path, show_col_types = FALSE)$Symbol
-        }
-    }
-
-    return(gene_sets)
-}
-
-# =============================================================================
-# Data Helper Functions
-# =============================================================================
-
-# Helper function to determine celltype column name
-get_celltype_column <- function(sample_data) {
-    if (is.null(sample_data)) {
-        return(NULL)
-    }
-
-    if ("PubCelltype" %in% colnames(sample_data)) {
-        return("PubCelltype")
-    } else if ("Celltype" %in% colnames(sample_data)) {
-        return("Celltype")
-    } else if ("celltype" %in% colnames(sample_data)) {
-        return("celltype")
-    }
-    return(NULL)
-}
-
-# Helper function to determine sample column name
-get_sample_column <- function(sample_data) {
-    if (is.null(sample_data)) {
-        return(NULL)
-    }
-
-    if ("PubName" %in% colnames(sample_data)) {
-        return("PubName")
-    } else if ("Name" %in% colnames(sample_data)) {
-        return("Name")
-    }
-    return(NULL)
-}
-
-# Helper function to create pre-filtered contrast data
-create_contrast_data <- function(expression_data, sample_data, group1, group2, data_type) {
-    if (is.null(expression_data) || is.null(sample_data) ||
-        is.null(group1) || is.null(group2) || is.null(data_type)) {
-        return(NULL)
-    }
-
-    celltype_col <- get_celltype_column(sample_data)
-    sample_col <- get_sample_column(sample_data)
-
-    if (is.null(celltype_col) || is.null(sample_col)) {
-        return(NULL)
-    }
-
-    # Get samples for the two contrast groups
-    contrast_samples <- sample_data %>%
-        filter(.data[[celltype_col]] %in% c(group1, group2)) %>%
-        select(all_of(c(sample_col, celltype_col))) %>%
-        rename(sample = !!sample_col, celltype = !!celltype_col)
-
-    if (nrow(contrast_samples) == 0) {
-        return(NULL)
-    }
-
-    # Filter expression data for contrast samples and data type
-    contrast_expression <- expression_data %>%
-        filter(
-            sample %in% contrast_samples$sample,
-            data_type == !!data_type
-        ) %>%
-        left_join(contrast_samples, by = "sample") %>%
-        mutate(
-            violin_group = case_when(
-                celltype == group1 ~ group1,
-                celltype == group2 ~ group2,
-                TRUE ~ "Other"
-            )
-        )
-
-    return(contrast_expression)
-}
-
-# =============================================================================
-# THEME AND AESTHETIC CONFIGURATION
-# =============================================================================
-
-# Define the application theme and styling
-app_theme <- list(
-    # === CORE BRAND COLORS ===
-    primary_color = "#DC143C", # Crimson red - main accent color
-    secondary_color = "#8B0000", # Dark red - secondary accent
-    tertiary_color = "#FFB6C1", # Light pink - subtle accent
-
-    # === NEUTRAL COLORS ===
-    background_white = "#FFFFFF", # Pure white backgrounds
-    background_light = "#F8F9FA", # Light gray backgrounds
-    background_dark = "#2C3E50", # Dark backgrounds for contrast
-    text_primary = "#000000", # Black primary text
-    text_secondary = "#4A4A4A", # Dark gray secondary text
-    text_light = "#777777", # Light gray tertiary text
-    text_white = "#FFFFFF", # White text for dark backgrounds
-
-    # === BORDER AND SEPARATOR COLORS ===
-    border_light = "#E9ECEF", # Light borders
-    border_medium = "#DEE2E6", # Medium borders
-    border_dark = "#6C757D", # Dark borders
-
-    # === COMPONENT-SPECIFIC COLORS ===
-    success_color = "#28A745", # Success/positive actions
-    warning_color = "#FFC107", # Warning states
-    error_color = "#DC3545", # Error states
-    info_color = "#17A2B8", # Informational elements
-
-    # === PLOT COLORS ===
-    plot_group1 = "#DC143C", # Primary red for group 1
-    plot_group2 = "#1f62a5", # Blue-gray for group 2
-    plot_other = "#95A5A6", # Light gray for "other" category
-    plot_background = "#FFFFFF", # White plot backgrounds
-
-    # === UI SKIN AND LAYOUT ===
-    dashboard_skin = "black", # Dashboard skin (red, blue, black, etc.)
-
-    # === TYPOGRAPHY ===
-    font_family_primary = "'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
-    font_family_mono = "'Consolas', 'Monaco', 'Courier New', monospace",
-    font_size_h1 = "24px",
-    font_size_h2 = "20px",
-    font_size_h3 = "18px",
-    font_size_h4 = "16px",
-    font_size_h5 = "14px",
-    font_size_body = "13px",
-    font_size_small = "11px",
-
-    # === SPACING ===
-    spacing_xs = "4px",
-    spacing_sm = "8px",
-    spacing_md = "12px",
-    spacing_lg = "16px",
-    spacing_xl = "24px",
-    spacing_xxl = "32px",
-
-    # === LOGO CONFIGURATION ===
-    logo_primary_url = "www/anatomic_logo.png",
-    logo_link_url = "https://www.anatomic.com/",
-
-    # === BOX SHADOWS AND EFFECTS ===
-    shadow_light = "0 2px 4px rgba(0,0,0,0.1)",
-    shadow_medium = "0 4px 8px rgba(0,0,0,0.15)",
-    shadow_heavy = "0 8px 16px rgba(0,0,0,0.2)",
-
-    # === BORDER RADIUS ===
-    radius_sm = "4px",
-    radius_md = "6px",
-    radius_lg = "8px",
-    radius_xl = "12px"
-)
-
-# CSS styling function
-generate_app_css <- function(theme) {
-    HTML(paste0("
-        /* === GLOBAL STYLES === */
-        body, .content-wrapper, .right-side {
-            background-color: ", theme$background_white, " !important;
-            font-family: ", theme$font_family_primary, ";
-            color: ", theme$text_primary, ";
-        }
-
-        /* === HEADER STYLING === */
-        .main-header {
-            background-color: ", theme$background_white, " !important;
-            border-bottom: 2px solid ", theme$primary_color, " !important;
-        }
-
-        .main-header .navbar {
-            background-color: ", theme$background_white, " !important;
-        }
-
-        .main-header .logo {
-            background-color: ", theme$background_white, " !important;
-            color: ", theme$text_primary, " !important;
-            font-family: ", theme$font_family_primary, ";
-            font-weight: bold;
-            font-size: ", theme$font_size_h3, ";
-            border-right: 1px solid ", theme$border_light, ";
-        }
-
-        .main-header .logo:hover {
-            background-color: ", theme$background_light, " !important;
-        }
-
-        /* === SIDEBAR STYLING === */
-        .main-sidebar {
-            background-color: ", theme$background_dark, " !important;
-        }
-
-        .sidebar {
-            background-color: ", theme$background_dark, " !important;
-            color: ", theme$text_white, ";
-        }
-
-        .sidebar-menu > li > a {
-            color: ", theme$text_white, " !important;
-            border-left: 3px solid transparent;
-        }
-
-        .sidebar-menu > li > a:hover {
-            background-color: ", theme$primary_color, " !important;
-            border-left-color: ", theme$secondary_color, ";
-        }
-
-        /* === CONTENT AREA === */
-        .content {
-            background-color: ", theme$background_white, " !important;
-            padding: ", theme$spacing_lg, ";
-        }
-
-        /* === BOX STYLING === */
-        .box {
-            border-radius: ", theme$radius_md, ";
-            box-shadow: ", theme$shadow_light, ";
-            border-top: 3px solid ", theme$primary_color, " !important;
-            background-color: ", theme$background_white, ";
-        }
-
-        .box-header {
-            background-color: ", theme$background_light, " !important;
-            border-bottom: 1px solid ", theme$border_light, ";
-        }
-
-        .box-header .box-title {
-            color: ", theme$text_primary, " !important;
-            font-weight: bold;
-        }
-
-        .box.box-primary .box-header {
-            background-color: ", theme$primary_color, " !important;
-            color: ", theme$text_white, " !important;
-        }
-
-        .box.box-primary .box-header .box-title {
-            color: ", theme$text_white, " !important;
-        }
-
-        .box.box-info .box-header {
-            background-color: ", theme$info_color, " !important;
-            color: ", theme$text_white, " !important;
-        }
-
-        .box.box-info .box-header .box-title {
-            color: ", theme$text_white, " !important;
-        }
-
-        /* === FORM CONTROLS === */
-        .form-control {
-            border: 1px solid ", theme$border_medium, ";
-            border-radius: ", theme$radius_sm, ";
-            color: ", theme$text_primary, ";
-        }
-
-        .form-control:focus {
-            border-color: ", theme$primary_color, ";
-            box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25);
-        }
-
-        .btn-primary {
-            background-color: ", theme$primary_color, " !important;
-            border-color: ", theme$primary_color, " !important;
-            color: ", theme$text_white, " !important;
-        }
-
-        .btn-primary:hover {
-            background-color: ", theme$secondary_color, " !important;
-            border-color: ", theme$secondary_color, " !important;
-        }
-
-        /* === LOADING OVERLAY === */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(44, 62, 80, 0.95);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-
-        .loading-content {
-            text-align: center;
-            padding: ", theme$spacing_xxl, ";
-            background: ", theme$background_white, ";
-            border-radius: ", theme$radius_xl, ";
-            box-shadow: ", theme$shadow_heavy, ";
-            border: 2px solid ", theme$primary_color, ";
-        }
-
-        .loading-title {
-            color: ", theme$primary_color, ";
-            font-size: ", theme$font_size_h2, ";
-            font-weight: bold;
-            margin-bottom: ", theme$spacing_lg, ";
-            font-family: ", theme$font_family_primary, ";
-        }
-
-        .progress-container {
-            width: 300px;
-            height: 20px;
-            background-color: ", theme$background_light, ";
-            border-radius: ", theme$radius_lg, ";
-            overflow: hidden;
-            margin: ", theme$spacing_lg, " 0;
-            border: 1px solid ", theme$border_medium, ";
-        }
-
-        .progress-bar {
-            width: 0%;
-            height: 100%;
-            background: linear-gradient(90deg, ", theme$primary_color, ", ", theme$secondary_color, ");
-            transition: width 0.3s ease;
-        }
-
-        .loading-message {
-            color: ", theme$text_secondary, ";
-            margin: ", theme$spacing_md, " 0;
-            font-size: ", theme$font_size_body, ";
-        }
-
-        .loading-description {
-            color: ", theme$text_light, ";
-            font-size: ", theme$font_size_small, ";
-        }
-
-        /* === LOGO STYLING === */
-        .logo-container {
-            display: flex;
-            align-items: center;
-            gap: ", theme$spacing_md, ";
-            margin: ", theme$spacing_md, " 0;
-        }
-
-        .logo-primary {
-            max-height: 50px;
-            max-width: 150px;
-            cursor: pointer;
-            transition: opacity 0.2s ease;
-        }
-
-        .logo-primary:hover {
-            opacity: 0.8;
-        }
-
-        .logo-link {
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: ", theme$spacing_md, ";
-        }
-
-        .logo-link:hover {
-            text-decoration: none;
-        }
-
-        /* === DATA TABLE STYLING === */
-        .dataTables_wrapper {
-            font-size: ", theme$font_size_small, ";
-        }
-
-        .table-striped > tbody > tr:nth-of-type(odd) {
-            background-color: ", theme$background_light, ";
-        }
-
-        .dt-group1 {
-            background-color: rgba(220, 20, 60, 0.1) !important;
-        }
-
-        .dt-group2 {
-            background-color: rgba(44, 62, 80, 0.1) !important;
-        }
-
-        /* === HELP TEXT AND INSTRUCTIONS === */
-        .help-text {
-            color: ", theme$text_light, ";
-            font-size: ", theme$font_size_small, ";
-            font-style: italic;
-        }
-
-        .instructions-header {
-            color: ", theme$text_primary, ";
-            font-weight: bold;
-            font-size: ", theme$font_size_h5, ";
-        }
-
-        .statistics-header {
-            color: ", theme$text_primary, ";
-            font-weight: bold;
-            font-size: ", theme$font_size_h5, ";
-            margin-bottom: ", theme$spacing_sm, ";
-        }
-
-        .analysis-stats-container {
-            max-height: 320px;
-            overflow-y: auto;
-            padding-right: ", theme$spacing_sm, ";
-        }
-
-        .stat-card {
-            background-color: ", theme$background_light, ";
-            border: 1px solid ", theme$border_light, ";
-            border-radius: ", theme$radius_sm, ";
-            padding: ", theme$spacing_sm, ";
-            margin-bottom: ", theme$spacing_sm, ";
-        }
-
-        .stat-card-header {
-            font-weight: bold;
-            color: ", theme$primary_color, ";
-            font-size: ", theme$font_size_small, ";
-            margin-bottom: ", theme$spacing_xs, ";
-        }
-
-        .stat-card-content {
-            font-size: ", theme$font_size_small, ";
-            color: ", theme$text_secondary, ";
-            line-height: 1.4;
-        }
-
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 2px 0;
-            border-bottom: 1px solid ", theme$border_light, ";
-        }
-
-        .stat-item:last-child {
-            border-bottom: none;
-        }
-
-        .stat-label {
-            font-weight: 500;
-            color: ", theme$text_primary, ";
-        }
-
-        .stat-value {
-            color: ", theme$text_secondary, ";
-            font-family: ", theme$font_family_mono, ";
-        }
-
-        .summary-box {
-            font-size: ", theme$font_size_small, ";
-            line-height: 1.4;
-            max-height: 400px;
-            overflow-y: auto;
-            background-color: ", theme$background_light, ";
-            padding: ", theme$spacing_md, ";
-            border-radius: ", theme$radius_sm, ";
-            border: 1px solid ", theme$border_light, ";
-            font-family: ", theme$font_family_mono, ";
-        }
-
-        /* === RESPONSIVE DESIGN === */
-        @media (max-width: 768px) {
-            .logo-container {
-                flex-direction: column;
-                gap: ", theme$spacing_sm, ";
-            }
-
-            .loading-content {
-                margin: ", theme$spacing_md, ";
-                padding: ", theme$spacing_lg, ";
-            }
-
-            .progress-container {
-                width: 250px;
-            }
-        }
-    "))
-}
-
-# Plot theme function
-get_plot_theme <- function(theme) {
-    list(
-        colors = c(theme$plot_group1, theme$plot_group2, theme$plot_other),
-        background = theme$plot_background,
-        text_color = theme$text_primary,
-        grid_color = theme$border_light,
-        title_size = 14,
-        subtitle_size = 11,
-        axis_text_size = 12,
-        legend_text_size = 10
-    )
-}
+# Source modular components
+source("data_utils.R")        # Data loading and processing functions
+source("theme_config.R")      # Theme configuration and CSS generation
+source("plot_utils.R")        # Plotting and visualization functions
+source("ui_components.R")     # Reusable UI components
+source("server_utils.R")      # Server helper functions
+source("coexpression_analysis.R") # Co-expression analysis functions
 
 # =============================================================================
 # UI Definition
@@ -593,349 +38,23 @@ get_plot_theme <- function(theme) {
 
 ui <- dashboardPage(
     skin = app_theme$dashboard_skin,
-    dashboardHeader(
-        title = div(
-            class = "logo-container",
-            tags$a(
-                href = app_theme$logo_link_url,
-                target = "_blank",
-                class = "logo-link",
-                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo")
-            )
-        )
-    ),
-    dashboardSidebar(
-        width = 300,
-        h4("Analysis Controls", style = paste0("margin: ", app_theme$spacing_lg, "; color: ", app_theme$text_white, ";")),
-
-        # Contrast selection
-        div(
-            style = paste0("margin: ", app_theme$spacing_lg, ";"),
-            selectInput("group1",
-                "Group 1 (Baseline):",
-                choices = NULL,
-                multiple = FALSE
-            ),
-            selectInput("group2",
-                "Group 2 (Comparison):",
-                choices = NULL,
-                multiple = FALSE
-            ),
-            br(),
-
-            # Unified Gene Selection Section
-            h5("Gene Selection", style = paste0("color: ", app_theme$text_white, "; margin-bottom: ", app_theme$spacing_sm, ";")),
-            
-            # Gene set selection
-            selectInput("gene_set_selection",
-                "Choose Gene Set:",
-                choices = NULL,
-                selected = "Custom Genes"
-            ),
-            
-            # Custom gene upload
-            fileInput("gene_file_upload",
-                "Upload Custom Gene Set:",
-                accept = c(".csv", ".tsv", ".txt"),
-                placeholder = "No file selected"
-            ),
-            helpText("Upload CSV/TSV with gene symbols in first column. Selected genes will be used across all plots.",
-                class = "help-text"
-            ),
-
-            # Interactive gene search (for custom selection)
-            conditionalPanel(
-                condition = "input.gene_set_selection == 'Custom Genes'",
-                selectizeInput("selected_genes",
-                    "Search & Select Genes:",
-                    choices = NULL,
-                    multiple = TRUE,
-                    options = list(
-                        placeholder = "Search for genes...",
-                        maxItems = 20,
-                        create = FALSE
-                    )
-                )
-            ),
-            
-            # Display selected genes count
-            uiOutput("selected_genes_display"),
-            
-            # Gene pagination controls (only show when multiple genes selected)
-            conditionalPanel(
-                condition = "output.show_gene_pagination",
-                div(
-                    style = paste0("margin-top: ", app_theme$spacing_sm, ";"),
-                    h6("Expression Plot Controls", style = paste0("color: ", app_theme$text_white, "; margin-bottom: ", app_theme$spacing_xs, ";")),
-                    fluidRow(
-                        column(6, 
-                            actionButton("prev_genes", "← Prev", 
-                                       class = "btn-outline-primary btn-sm btn-block",
-                                       style = paste0("color: ", app_theme$text_white, "; border-color: ", app_theme$text_white, ";"))
-                        ),
-                        column(6,
-                            actionButton("next_genes", "Next →", 
-                                       class = "btn-outline-primary btn-sm btn-block",
-                                       style = paste0("color: ", app_theme$text_white, "; border-color: ", app_theme$text_white, ";"))
-                        )
-                    ),
-                    div(
-                        style = paste0("text-align: center; margin-top: ", app_theme$spacing_xs, "; color: ", app_theme$text_light, "; font-size: ", app_theme$font_size_small, ";"),
-                        textOutput("gene_pagination_info", inline = TRUE)
-                    )
-                )
-            ),
-            br(),
-
-            # Data type selection
-            radioButtons("data_type",
-                "Expression Data Type:",
-                choices = list(
-                    "log2(CPM + 1)" = "log2_cpm",
-                    "VST (Variance Stabilizing Transform)" = "vst"
-                ),
-                selected = "log2_cpm"
-            ),
-            br(),
-
-            # Plot options
-            checkboxInput("show_points", "Show Individual Points", value = TRUE),
-            br(),
-
-            # Download button
-            downloadButton("download_plot", "Download Plot", class = "btn-primary btn-block")
-        )
-    ),
+    create_app_header(app_theme),
+    create_app_sidebar(app_theme),
     dashboardBody(
         # Apply custom theme CSS
         tags$head(
-            tags$style(generate_app_css(app_theme))
+            tags$style(generate_app_css(app_theme)),
+            tags$script(generate_app_javascript())
         ),
 
         # Loading overlay (initially visible)
-        div(
-            id = "loading-overlay", class = "loading-overlay",
-            div(
-                class = "loading-content",
-                div(
-                    h3("Loading Anatomic RNA Atlas", class = "loading-title"),
-                    div(
-                        id = "loading-progress",
-                        div(
-                            class = "progress-container",
-                            div(id = "progress-bar", class = "progress-bar")
-                        ),
-                        p(id = "loading-message", "Initializing data loading...", class = "loading-message")
-                    ),
-                    p("Please wait while we load the expression data and sample metadata.",
-                        class = "loading-description"
-                    )
-                )
-            )
-        ),
+        create_loading_overlay(app_theme),
 
-        # Add JavaScript for loading progress
-        tags$script(HTML("
-            Shiny.addCustomMessageHandler('updateProgress', function(data) {
-                document.getElementById('progress-bar').style.width = data.percent + '%';
-                document.getElementById('loading-message').textContent = data.message;
-            });
-
-            Shiny.addCustomMessageHandler('hideLoading', function(data) {
-                var overlay = document.getElementById('loading-overlay');
-                if (overlay) {
-                    overlay.style.display = 'none';
-                }
-            });
-
-            Shiny.addCustomMessageHandler('addProgressHandlers', function(data) {
-                // Any additional JavaScript setup can go here
-            });
-            
-            // Auto-scroll coexpression log to bottom when updated
-            $(document).on('shiny:value', function(event) {
-                if (event.target.id === 'coexpression_live_log') {
-                    var container = document.getElementById('coexpression_log_container');
-                    if (container) {
-                        setTimeout(function() {
-                            container.scrollTop = container.scrollHeight;
-                        }, 100);
-                    }
-                }
-            });
-        ")),
-        fluidRow(
-            # Main expression plot
-            box(
-                title = "Expression Comparison",
-                status = "primary",
-                solidHeader = TRUE,
-                width = 7,
-                height = "900px",
-                tabsetPanel(
-                    tabPanel(
-                        "Expression Distribution",
-                        # Pagination controls
-                        fluidRow(
-                            column(12,
-                                div(
-                                    style = "margin-bottom: 10px; padding: 10px; background-color: #f8f9fa; border-radius: 5px;",
-                                    fluidRow(
-                                        column(3,
-                                            uiOutput("gene_pagination_info")
-                                        ),
-                                        column(3,
-                                            conditionalPanel(
-                                                condition = "output.show_genes_per_page",
-                                                div(
-                                                    style = "font-size: 12px;",
-                                                    selectInput("genes_per_page_selector", 
-                                                               "Genes per page:", 
-                                                               choices = c("5" = 5, "10" = 10, "15" = 15, "20" = 20), 
-                                                               selected = 10, 
-                                                               width = "120px")
-                                                )
-                                            )
-                                        ),
-                                        column(6,
-                                            div(
-                                                style = "text-align: right;",
-                                                uiOutput("gene_pagination_buttons")
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        ),
-                        plotlyOutput("expression_histogram", height = "750px") %>% withSpinner()
-                    ),
-                    tabPanel(
-                        "Gene Set Heatmap",
-                        plotlyOutput("gene_set_heatmap", height = "800px") %>% withSpinner()
-                    ),
-                    tabPanel(
-                        "Co-Expression Analysis",
-                        fluidRow(
-                            column(
-                                width = 3,
-                                wellPanel(
-                                    h5("Co-Expression Controls", style = "margin-top: 0;"),
-                                    helpText("Uses currently selected genes to find co-expressed genes across the entire dataset.",
-                                           class = "help-text"),
-                                    numericInput("min_correlation_coexpr",
-                                        "Minimum Correlation:",
-                                        value = 0.6,
-                                        min = 0.1,
-                                        max = 1.0,
-                                        step = 0.1
-                                    ),
-                                    numericInput("n_similar_genes",
-                                        "Number of Similar Genes:",
-                                        value = 5,
-                                        min = 1,
-                                        max = 250,
-                                        step = 1
-                                    ),
-                                    numericInput("max_genes_batch",
-                                        "Batch Size:",
-                                        value = 500,
-                                        min = 100,
-                                        max = 2000,
-                                        step = 100
-                                    ),
-                                    checkboxInput("use_parallel",
-                                        "Use parallel processing",
-                                        value = FALSE
-                                    ),
-                                    helpText("Analysis uses streaming mode with automatic memory management. Smaller batch sizes use less memory.",
-                                           class = "help-text"),
-                                    helpText("Parallel processing can help with very large datasets but may be unstable.",
-                                           class = "help-text"),
-                                    br(),
-                                    actionButton("run_coexpression", 
-                                               "Find Co-expressed Genes", 
-                                               class = "btn-primary btn-block")
-                                )
-                            ),
-                            column(
-                                width = 9,
-                                tabsetPanel(
-                                    tabPanel(
-                                        "Analysis & Results",
-                                        fluidRow(
-                                            column(
-                                                width = 4,
-                                                h6("Analysis Progress", style = "font-weight: bold;"),
-                                                div(
-                                                    id = "coexpression_log_container",
-                                                    style = paste0("height: 300px; overflow-y: auto; border: 1px solid ", app_theme$border_light, "; border-radius: ", app_theme$radius_sm, "; padding: ", app_theme$spacing_sm, "; background-color: ", app_theme$background_light, ";"),
-                                                    verbatimTextOutput("coexpression_live_log")
-                                                ),
-                                                br(),
-                                                h6("Found Genes Summary", style = "font-weight: bold;"),
-                                                DT::dataTableOutput("coexpressed_genes_summary", height = "250px")
-                                            ),
-                                            column(
-                                                width = 8,
-                                                h6("Co-expressed Genes Details", style = "margin-top: 0px;"),
-                                                DT::dataTableOutput("coexpression_detailed_table", height = "600px") %>%
-                                                    shinycssloaders::withSpinner()
-                                            )
-                                        )
-                                    ),
-                                    tabPanel(
-                                        "Expression Heatmap",
-                                        plotlyOutput("coexpression_heatmap", height = "700px") %>% 
-                                            shinycssloaders::withSpinner()
-                                    ),
-                                    tabPanel(
-                                        "Correlation Network",
-                                        networkD3::forceNetworkOutput("coexpression_network", height = "700px") %>%
-                                            shinycssloaders::withSpinner()
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            ),
-
-            # Summary statistics
-            box(
-                title = "Analysis Overview",
-                status = "primary",
-                solidHeader = TRUE,
-                width = 5,
-                height = "900px",
-                plotlyOutput("group_expression_barplot", height = "320px"),
-                h4(textOutput("contrast_title")),
-                br(),
-                div(
-                    class = "analysis-stats-container",
-                    style = "max-height: 480px; overflow-y: auto; padding-right: 8px;",
-                    uiOutput("sample_counts_ui"),
-                    conditionalPanel(
-                        condition = "input.selected_genes && input.selected_genes.length > 0",
-                        h5("Gene Statistics:", class = "statistics-header", style = "margin-top: 12px;"),
-                        DT::dataTableOutput("gene_stats_table", height = "200px")
-                    ),
-                    conditionalPanel(
-                        condition = "!input.selected_genes || input.selected_genes.length == 0",
-                        uiOutput("overall_stats_ui")
-                    )
-                )
-            )
-        ),
-        fluidRow(
-            # Expression data table
-            box(
-                title = textOutput("expression_table_title", inline = TRUE),
-                status = "primary",
-                solidHeader = TRUE,
-                width = 12,
-                DT::dataTableOutput("expression_table") %>% withSpinner()
-            )
-        )
+        # Main content layout
+        create_main_layout(app_theme),
+        
+        # Bottom section layout
+        create_bottom_layout()
     )
 )
 
@@ -955,8 +74,7 @@ server <- function(input, output, session) {
         contrast_data = NULL,
         uploaded_genes = NULL,
         data_loaded = FALSE,
-        gene_page = 1,  # Current page for gene pagination
-        genes_per_page = 10  # Number of genes per page
+        gene_page = 1  # Current page for gene pagination (always 10 genes per page)
     )
 
     # Load data with progress indication
@@ -1062,6 +180,15 @@ server <- function(input, output, session) {
         }
     })
 
+    # Sync co-expression data type with main data type selector
+    observe({
+        if (!is.null(input$data_type)) {
+            updateSelectInput(session, "coexpression_data_type",
+                selected = input$data_type
+            )
+        }
+    })
+
     # Reactive expression for currently selected genes (unified across all plots)
     current_genes <- reactive({
         if (input$gene_set_selection == "Custom Genes") {
@@ -1081,16 +208,17 @@ server <- function(input, output, session) {
             return(NULL)
         }
         
-        # Calculate pagination
+        # Calculate pagination with fixed 10 genes per page
+        genes_per_page <- 10
         total_genes <- length(all_genes)
-        start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
-        end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+        start_idx <- (values$gene_page - 1) * genes_per_page + 1
+        end_idx <- min(values$gene_page * genes_per_page, total_genes)
         
         if (start_idx > total_genes) {
             # Reset to page 1 if current page is out of bounds
             values$gene_page <- 1
             start_idx <- 1
-            end_idx <- min(values$genes_per_page, total_genes)
+            end_idx <- min(genes_per_page, total_genes)
         }
         
         return(all_genes[start_idx:end_idx])
@@ -1102,34 +230,36 @@ server <- function(input, output, session) {
         values$gene_page <- 1  # Reset to first page
     })
     
-    # Pagination controls
-    observeEvent(input$next_gene_page, {
+    # Simple increment/decrement controls
+    observeEvent(input$next_genes, {
         all_genes <- current_genes()
         if (!is.null(all_genes) && length(all_genes) > 0) {
-            max_pages <- ceiling(length(all_genes) / values$genes_per_page)
+            genes_per_page <- 10
+            max_pages <- ceiling(length(all_genes) / genes_per_page)
             if (values$gene_page < max_pages) {
                 values$gene_page <- values$gene_page + 1
             }
         }
     })
     
-    observeEvent(input$prev_gene_page, {
+    observeEvent(input$prev_genes, {
         if (values$gene_page > 1) {
             values$gene_page <- values$gene_page - 1
         }
     })
     
-    # Pagination info UI
+    # Simple pagination info UI
     output$gene_pagination_info <- renderUI({
         all_genes <- current_genes()
-        if (is.null(all_genes) || length(all_genes) <= values$genes_per_page) {
+        if (is.null(all_genes) || length(all_genes) <= 10) {
             return(span("", style = "color: #666;"))
         }
         
+        genes_per_page <- 10
         total_genes <- length(all_genes)
-        max_pages <- ceiling(total_genes / values$genes_per_page)
-        start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
-        end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+        max_pages <- ceiling(total_genes / genes_per_page)
+        start_idx <- (values$gene_page - 1) * genes_per_page + 1
+        end_idx <- min(values$gene_page * genes_per_page, total_genes)
         
         span(
             paste0("Showing genes ", start_idx, "-", end_idx, " of ", total_genes, 
@@ -1138,54 +268,12 @@ server <- function(input, output, session) {
         )
     })
     
-    # Pagination buttons UI
-    output$gene_pagination_buttons <- renderUI({
+    # Output to control conditional panel for gene navigation
+    output$show_gene_pagination <- reactive({
         all_genes <- current_genes()
-        if (is.null(all_genes) || length(all_genes) <= values$genes_per_page) {
-            return(NULL)  # Don't show buttons if pagination not needed
-        }
-        
-        max_pages <- ceiling(length(all_genes) / values$genes_per_page)
-        
-        # Determine button states
-        prev_disabled <- values$gene_page <= 1
-        next_disabled <- values$gene_page >= max_pages
-        
-        tagList(
-            actionButton("prev_gene_page", "← Previous", 
-                        class = paste("btn-sm", if(prev_disabled) "disabled" else "btn-default"), 
-                        style = paste("margin-right: 5px;", 
-                                    if(prev_disabled) "opacity: 0.5; cursor: not-allowed;" else ""),
-                        disabled = prev_disabled),
-            actionButton("next_gene_page", "Next →", 
-                        class = paste("btn-sm", if(next_disabled) "disabled" else "btn-default"),
-                        style = if(next_disabled) "opacity: 0.5; cursor: not-allowed;" else "",
-                        disabled = next_disabled)
-        )
+        !is.null(all_genes) && length(all_genes) > 10
     })
-    
-    # Observer for genes per page changes
-    observeEvent(input$genes_per_page_selector, {
-        if (!is.null(input$genes_per_page_selector)) {
-            values$genes_per_page <- as.numeric(input$genes_per_page_selector)
-            values$gene_page <- 1  # Reset to first page when changing page size
-        }
-    })
-    
-    # Output to control conditional panel for genes per page selector
-    output$show_genes_per_page <- reactive({
-        all_genes <- current_genes()
-        !is.null(all_genes) && length(all_genes) > 5
-    })
-    outputOptions(output, "show_genes_per_page", suspendWhenHidden = FALSE)
-    
-    # Observer to enable/disable pagination buttons
-    observe({
-        # This observer will just trigger updates to the UI elements
-        # The actual enable/disable logic will be in the UI rendering
-        all_genes <- current_genes()
-        values$gene_page  # Also trigger on page changes
-    })
+    outputOptions(output, "show_gene_pagination", suspendWhenHidden = FALSE)
     
     # Display selected genes information
     output$selected_genes_display <- renderUI({
@@ -1320,17 +408,18 @@ server <- function(input, output, session) {
         # Create subtitle with data type information and pagination
         data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
         all_selected_genes <- current_genes()
+        genes_per_page <- 10  # Fixed at 10 genes per page
         
         subtitle_parts <- c(
             paste0("Data: ", data_type_label)
         )
         
         # Add pagination info if we have multiple pages
-        if (!is.null(all_selected_genes) && length(all_selected_genes) > values$genes_per_page) {
+        if (!is.null(all_selected_genes) && length(all_selected_genes) > genes_per_page) {
             total_genes <- length(all_selected_genes)
-            max_pages <- ceiling(total_genes / values$genes_per_page)
-            start_idx <- (values$gene_page - 1) * values$genes_per_page + 1
-            end_idx <- min(values$gene_page * values$genes_per_page, total_genes)
+            max_pages <- ceiling(total_genes / genes_per_page)
+            start_idx <- (values$gene_page - 1) * genes_per_page + 1
+            end_idx <- min(values$gene_page * genes_per_page, total_genes)
             
             subtitle_parts <- c(
                 subtitle_parts,
@@ -1365,7 +454,7 @@ server <- function(input, output, session) {
                     c(input$group1, input$group2, "Other")
                 )
             ) +
-            facet_wrap(~gene, scales = "free_y", nrow = 1) +
+            facet_wrap(~gene, scales = "free_y", nrow = 2) +
             labs(
                 title = "Expression Distribution of Selected Genes",
                 subtitle = subtitle_text,
@@ -2354,7 +1443,7 @@ server <- function(input, output, session) {
                                   ", n_similar =", input$n_similar_genes, 
                                   ", batch_size =", input$max_genes_batch))
         add_coexpression_log(paste("Using parallel processing:", input$use_parallel))
-        add_coexpression_log(paste("Data type:", input$data_type))
+        add_coexpression_log(paste("Data type:", input$coexpression_data_type))
         
         # Get dataset info for progress message
         total_genes <- length(unique(values$expression_data$gene))
@@ -2371,7 +1460,7 @@ server <- function(input, output, session) {
                 query_genes = selected_genes,
                 n_similar = input$n_similar_genes %||% 5,
                 min_correlation = input$min_correlation_coexpr %||% 0.6,
-                data_type = input$data_type,
+                data_type = input$coexpression_data_type,
                 max_genes_batch = input$max_genes_batch %||% 1000,
                 use_parallel = input$use_parallel %||% FALSE,
                 log_func = add_coexpression_log
