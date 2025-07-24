@@ -623,17 +623,43 @@ ui <- dashboardPage(
             ),
             br(),
 
-            # Gene search
-            selectizeInput("selected_genes",
-                "Select Genes to Highlight:",
+            # Unified Gene Selection Section
+            h5("Gene Selection", style = paste0("color: ", app_theme$text_white, "; margin-bottom: ", app_theme$spacing_sm, ";")),
+            
+            # Gene set selection
+            selectInput("gene_set_selection",
+                "Choose Gene Set:",
                 choices = NULL,
-                multiple = TRUE,
-                options = list(
-                    placeholder = "Search for genes...",
-                    maxItems = 20,
-                    create = FALSE
+                selected = "Custom Genes"
+            ),
+            
+            # Custom gene upload
+            fileInput("gene_file_upload",
+                "Upload Custom Gene Set:",
+                accept = c(".csv", ".tsv", ".txt"),
+                placeholder = "No file selected"
+            ),
+            helpText("Upload CSV/TSV with gene symbols in first column. Selected genes will be used across all plots.",
+                class = "help-text"
+            ),
+
+            # Interactive gene search (for custom selection)
+            conditionalPanel(
+                condition = "input.gene_set_selection == 'Custom Genes'",
+                selectizeInput("selected_genes",
+                    "Search & Select Genes:",
+                    choices = NULL,
+                    multiple = TRUE,
+                    options = list(
+                        placeholder = "Search for genes...",
+                        maxItems = 20,
+                        create = FALSE
+                    )
                 )
             ),
+            
+            # Display selected genes count
+            uiOutput("selected_genes_display"),
             br(),
 
             # Data type selection
@@ -708,41 +734,15 @@ ui <- dashboardPage(
                 status = "primary",
                 solidHeader = TRUE,
                 width = 7,
-                height = "600px",
+                height = "900px",
                 tabsetPanel(
                     tabPanel(
                         "Expression Distribution",
-                        plotlyOutput("expression_histogram", height = "500px") %>% withSpinner()
+                        plotlyOutput("expression_histogram", height = "800px") %>% withSpinner()
                     ),
                     tabPanel(
                         "Gene Set Heatmap",
-                        fluidRow(
-                            column(
-                                width = 3,
-                                wellPanel(
-                                    h5("Heatmap Controls", style = "margin-top: 0;"),
-                                    selectInput("gene_set_selection",
-                                        "Choose Gene Set:",
-                                        choices = NULL,
-                                        selected = "Custom Genes"
-                                    ),
-                                    hr(),
-                                    h6("Upload Custom Gene Set:", style = "font-weight: bold;"),
-                                    fileInput("gene_file_upload",
-                                        "Upload CSV/TSV file:",
-                                        accept = c(".csv", ".tsv", ".txt"),
-                                        placeholder = "No file selected"
-                                    ),
-                                    helpText("File should contain gene symbols, one per line or in first column.",
-                                        class = "help-text"
-                                    )
-                                )
-                            ),
-                            column(
-                                width = 9,
-                                plotlyOutput("gene_set_heatmap", height = "500px") %>% withSpinner()
-                            )
-                        )
+                        plotlyOutput("gene_set_heatmap", height = "800px") %>% withSpinner()
                     ),
                     tabPanel(
                         "Co-Expression Analysis",
@@ -752,7 +752,7 @@ ui <- dashboardPage(
                                 wellPanel(
                                     h5("Co-Expression Controls", style = "margin-top: 0;"),
                                     
-                                    helpText("Select at least 3 genes to find co-expressed genes across the entire dataset.",
+                                    helpText("Uses currently selected genes to find co-expressed genes across the entire dataset.",
                                            class = "help-text"),
                                     
                                     numericInput("min_correlation_coexpr",
@@ -773,9 +773,9 @@ ui <- dashboardPage(
                                     
                                     numericInput("max_genes_batch",
                                         "Batch Size:",
-                                        value = 1000,
+                                        value = 500,
                                         min = 100,
-                                        max = 5000,
+                                        max = 2000,
                                         step = 100
                                     ),
                                     
@@ -812,12 +812,12 @@ ui <- dashboardPage(
                                 tabsetPanel(
                                     tabPanel(
                                         "Expression Heatmap",
-                                        plotlyOutput("coexpression_heatmap", height = "450px") %>% 
+                                        plotlyOutput("coexpression_heatmap", height = "700px") %>% 
                                             shinycssloaders::withSpinner()
                                     ),
                                     tabPanel(
                                         "Correlation Network",
-                                        networkD3::forceNetworkOutput("coexpression_network", height = "450px") %>%
+                                        networkD3::forceNetworkOutput("coexpression_network", height = "700px") %>%
                                             shinycssloaders::withSpinner()
                                     ),
                                     tabPanel(
@@ -839,12 +839,13 @@ ui <- dashboardPage(
                 status = "primary",
                 solidHeader = TRUE,
                 width = 5,
-                height = "600px",
-                plotOutput("group_expression_barplot", height = "220px"),
+                height = "900px",
+                plotlyOutput("group_expression_barplot", height = "320px"),
                 h4(textOutput("contrast_title")),
                 br(),
                 div(
                     class = "analysis-stats-container",
+                    style = "max-height: 480px; overflow-y: auto; padding-right: 8px;",
                     uiOutput("sample_counts_ui"),
                     conditionalPanel(
                         condition = "input.selected_genes && input.selected_genes.length > 0",
@@ -992,6 +993,45 @@ server <- function(input, output, session) {
         }
     })
 
+    # Reactive expression for currently selected genes (unified across all plots)
+    current_genes <- reactive({
+        if (input$gene_set_selection == "Custom Genes") {
+            return(input$selected_genes)
+        } else if (input$gene_set_selection == "Uploaded Gene Set") {
+            return(values$uploaded_genes)
+        } else {
+            # Using a predefined gene set
+            return(gene_sets[[input$gene_set_selection]])
+        }
+    })
+    
+    # Display selected genes information
+    output$selected_genes_display <- renderUI({
+        genes <- current_genes()
+        
+        if (is.null(genes) || length(genes) == 0) {
+            return(div(
+                style = paste0("color: ", app_theme$text_light, "; font-size: ", app_theme$font_size_small, ";"),
+                "No genes selected"
+            ))
+        }
+        
+        gene_source <- if (input$gene_set_selection == "Custom Genes") {
+            "Custom selection"
+        } else if (input$gene_set_selection == "Uploaded Gene Set") {
+            "Uploaded gene set"
+        } else {
+            input$gene_set_selection
+        }
+        
+        div(
+            style = paste0("color: ", app_theme$text_white, "; font-size: ", app_theme$font_size_small, "; margin-bottom: ", app_theme$spacing_sm, ";"),
+            tags$strong(paste(length(genes), "genes selected")),
+            br(),
+            tags$em(paste("Source:", gene_source))
+        )
+    })
+
     # Handle file upload for custom gene sets
     observeEvent(input$gene_file_upload, {
         req(input$gene_file_upload)
@@ -1063,8 +1103,11 @@ server <- function(input, output, session) {
                 ))
         }
 
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
         # Only plot if genes are selected
-        if (length(input$selected_genes) == 0) {
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
             return(plotly_empty() %>%
                 add_annotations(
                     text = "Select genes to display expression plots",
@@ -1073,8 +1116,8 @@ server <- function(input, output, session) {
         }
 
         # Limit to maximum 10 genes for performance
-        genes_to_plot <- head(input$selected_genes, 10)
-        if (length(input$selected_genes) > 10) {
+        genes_to_plot <- head(selected_genes, 10)
+        if (length(selected_genes) > 10) {
             showNotification(
                 paste(
                     "Limited to first 10 genes for performance. Selected:",
@@ -1107,7 +1150,7 @@ server <- function(input, output, session) {
         # Create subtitle with data type information
         data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
         subtitle_text <- paste0(
-            "Expression distribution by group for: ", paste(input$selected_genes, collapse = ", "),
+            "Expression distribution by group for: ", paste(genes_to_plot, collapse = ", "),
             " (Data: ", data_type_label, ")"
         )
 
@@ -1143,7 +1186,7 @@ server <- function(input, output, session) {
                 legend.position = "bottom",
                 plot.title = element_text(size = plot_theme$title_size, face = "bold", color = plot_theme$text_color),
                 plot.subtitle = element_text(size = plot_theme$subtitle_size, color = app_theme$text_light),
-                axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5, size = plot_theme$axis_text_size, color = plot_theme$text_color),
+                axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = plot_theme$axis_text_size, color = plot_theme$text_color),
                 axis.text.y = element_text(color = plot_theme$text_color),
                 axis.title = element_text(color = plot_theme$text_color),
                 strip.text = element_text(color = plot_theme$text_color, face = "bold"),
@@ -1174,35 +1217,15 @@ server <- function(input, output, session) {
 
     # Single gene set heatmap
     output$gene_set_heatmap <- renderPlotly({
-        req(input$gene_set_selection)
-
-        # Determine which genes to use
-        if (input$gene_set_selection == "Custom Genes") {
-            if (length(input$selected_genes) == 0) {
-                return(plotly_empty() %>%
-                    add_annotations(
-                        text = "Select genes to display heatmap or choose a gene set",
-                        showarrow = FALSE
-                    ))
-            }
-            selected_genes <- input$selected_genes
-            data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-            heatmap_title <- paste0("Custom Gene Selection Heatmap (", data_type_label, ")")
-        } else if (input$gene_set_selection == "Uploaded Gene Set") {
-            if (is.null(values$uploaded_genes) || length(values$uploaded_genes) == 0) {
-                return(plotly_empty() %>%
-                    add_annotations(
-                        text = "Upload a gene set file to display heatmap",
-                        showarrow = FALSE
-                    ))
-            }
-            selected_genes <- values$uploaded_genes
-            data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-            heatmap_title <- paste0("Uploaded Gene Set Heatmap (", data_type_label, ")")
-        } else {
-            selected_genes <- gene_sets[[input$gene_set_selection]]
-            data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-            heatmap_title <- paste0(input$gene_set_selection, " Expression Heatmap (", data_type_label, ")")
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
+            return(plotly_empty() %>%
+                add_annotations(
+                    text = "Select genes or upload a gene set to display heatmap",
+                    showarrow = FALSE
+                ))
         }
 
         # Filter for genes that exist in the dataset
@@ -1245,6 +1268,18 @@ server <- function(input, output, session) {
         gene_names <- heatmap_data$gene
         expr_matrix <- as.matrix(heatmap_data[, -1])
         rownames(expr_matrix) <- gene_names
+
+        # Create title based on gene source
+        gene_source <- if (input$gene_set_selection == "Custom Genes") {
+            "Custom Gene Selection"
+        } else if (input$gene_set_selection == "Uploaded Gene Set") {
+            "Uploaded Gene Set"
+        } else {
+            input$gene_set_selection
+        }
+        
+        data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
+        heatmap_title <- paste0(gene_source, " Heatmap (", data_type_label, ")")
 
         # Create y-axis label based on data type
         y_axis_subtitle <- if (input$data_type == "log2_cpm") {
@@ -1515,7 +1550,7 @@ server <- function(input, output, session) {
 
         req(input$group1, input$group2)
 
-        # Use helper function to determine celltype column
+        # Use helper function to determine the cell type column
         celltype_col <- get_celltype_column(values$sample_data)
 
         if (is.null(celltype_col)) {
@@ -1557,7 +1592,10 @@ server <- function(input, output, session) {
 
     # Gene statistics datatable
     output$gene_stats_table <- DT::renderDataTable({
-        if (length(input$selected_genes) == 0) {
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
             return(data.frame(Message = "No genes selected"))
         }
 
@@ -1570,7 +1608,7 @@ server <- function(input, output, session) {
 
         # Filter for selected genes
         contrast_expression <- contrast_expression %>%
-            filter(gene %in% input$selected_genes)
+            filter(gene %in% selected_genes)
 
         if (nrow(contrast_expression) == 0) {
             return(data.frame(Message = "No expression data available for selected genes"))
@@ -1581,7 +1619,7 @@ server <- function(input, output, session) {
         # Calculate statistics for each gene
         gene_stats_list <- list()
 
-        for (gene in input$selected_genes) {
+        for (gene in selected_genes) {
             # Get expression data for this specific gene
             gene_expr <- contrast_expression %>%
                 filter(gene == !!gene)
@@ -1747,10 +1785,18 @@ server <- function(input, output, session) {
     })
 
     # Add group expression ranking barplot
-    output$group_expression_barplot <- renderPlot({
+    output$group_expression_barplot <- renderPlotly({
         req(values$expression_data, values$sample_data, input$data_type)
-        if (length(input$selected_genes) == 0) {
-            return(NULL)
+        
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
+            return(plotly_empty() %>%
+                add_annotations(
+                    text = "Select genes to display group expression plot",
+                    showarrow = FALSE
+                ))
         }
 
         # Use helper functions to determine column names
@@ -1758,13 +1804,17 @@ server <- function(input, output, session) {
         sample_col <- get_sample_column(values$sample_data)
 
         if (is.null(celltype_col) || is.null(sample_col)) {
-            return(NULL)
+            return(plotly_empty() %>%
+                add_annotations(
+                    text = "Unable to determine cell type or sample columns",
+                    showarrow = FALSE
+                ))
         }
 
         # Join and filter for selected genes and data type
         plot_data <- values$expression_data %>%
             filter(
-                gene %in% input$selected_genes,
+                gene %in% selected_genes,
                 data_type == input$data_type
             ) %>%
             left_join(
@@ -1780,49 +1830,106 @@ server <- function(input, output, session) {
             summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
             arrange(desc(mean_expression))
 
+        # Calculate individual gene means by group for points overlay
+        gene_means <- plot_data %>%
+            group_by(celltype, gene) %>%
+            summarise(gene_mean_expression = mean(expression, na.rm = TRUE), .groups = "drop")
+
         # Create dynamic title based on selected genes
-        title_text <- if (length(input$selected_genes) == 1) {
-            paste("Mean Expression by Group:", input$selected_genes[1])
+        title_text <- if (length(selected_genes) == 1) {
+            paste("Mean Expression by Group:", selected_genes[1])
         } else {
-            paste("Mean Expression by Group (", length(input$selected_genes), "genes averaged)")
+            paste("Mean Expression by Group (", length(selected_genes), "genes)")
         }
 
-        # Bar plot
-        ggplot(group_means, aes(x = reorder(celltype, mean_expression), y = mean_expression, fill = celltype)) +
-            geom_bar(stat = "identity", show.legend = FALSE, width = 0.7) +
-            coord_flip() +
-            labs(
-                title = title_text,
-                x = "Group",
-                y = if (input$data_type == "log2_cpm") "Mean log2(CPM + 1)" else "Mean VST"
-            ) +
-            theme_minimal() +
-            theme(
-                plot.title = element_text(size = 13, face = "bold"),
-                axis.text.y = element_text(size = 10),
-                axis.text.x = element_text(size = 10),
-                axis.title = element_text(size = 11)
-            )
+        # Create y-axis label
+        y_label <- if (input$data_type == "log2_cpm") "Mean log2(CPM + 1)" else "Mean VST"
+
+        # Create the base bar plot
+        p <- plot_ly() %>%
+            add_bars(
+                x = group_means$mean_expression,
+                y = reorder(group_means$celltype, group_means$mean_expression),
+                orientation = 'h',
+                name = "Group Average",
+                marker = list(color = app_theme$primary_color, opacity = 0.7),
+                hovertemplate = paste0(
+                    "<b>Group:</b> %{y}<br>",
+                    "<b>", y_label, ":</b> %{x:.3f}<br>",
+                    "<extra></extra>"
+                )
+            ) %>%
+            add_markers(
+                data = gene_means,
+                x = ~gene_mean_expression,
+                y = ~celltype,
+                name = "Individual Genes",
+                marker = list(
+                    color = app_theme$text_secondary,
+                    size = 6,
+                    opacity = 0.8
+                ),
+                hovertemplate = paste0(
+                    "<b>Gene:</b> %{text}<br>",
+                    "<b>Group:</b> %{y}<br>",
+                    "<b>", y_label, ":</b> %{x:.3f}<br>",
+                    "<extra></extra>"
+                ),
+                text = ~gene
+            ) %>%
+            layout(
+                title = list(
+                    text = title_text,
+                    font = list(size = 14, color = app_theme$text_primary)
+                ),
+                xaxis = list(
+                    title = y_label,
+                    titlefont = list(size = 12, color = app_theme$text_primary),
+                    tickfont = list(size = 10, color = app_theme$text_primary)
+                ),
+                yaxis = list(
+                    title = "Group",
+                    titlefont = list(size = 12, color = app_theme$text_primary),
+                    tickfont = list(size = 10, color = app_theme$text_primary)
+                ),
+                showlegend = TRUE,
+                legend = list(
+                    x = 0.7, y = 0.1,
+                    font = list(size = 10, color = app_theme$text_primary)
+                ),
+                plot_bgcolor = app_theme$background_white,
+                paper_bgcolor = app_theme$background_white,
+                margin = list(l = 120, r = 50, t = 50, b = 50)
+            ) %>%
+            config(displayModeBar = FALSE)
+
+        return(p)
     })
 
     # Dynamic title for expression table
     output$expression_table_title <- renderText({
-        if (length(input$selected_genes) > 0) {
-            if (length(input$selected_genes) == 1) {
-                paste("Expression Data for", input$selected_genes[1])
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
+        if (!is.null(selected_genes) && length(selected_genes) > 0) {
+            if (length(selected_genes) == 1) {
+                paste("Expression Data for", selected_genes[1])
             } else {
-                paste("Expression Data for", length(input$selected_genes), "Selected Genes")
+                paste("Expression Data for", length(selected_genes), "Selected Genes")
             }
         } else {
-            "Expression Data (First 50 Genes Alphabetically)"
+            "Expression Data (First Gene Alphabetically)"
         }
     })
 
     # Expression data table
     output$expression_table <- DT::renderDataTable({
-        # If no genes selected, show all genes (limit to first 1 for performance in default case)
-        genes_to_show <- if (length(input$selected_genes) > 0) {
-            input$selected_genes
+        # Use unified gene selection
+        selected_genes <- current_genes()
+        
+        # If no genes selected, show first gene alphabetically
+        genes_to_show <- if (!is.null(selected_genes) && length(selected_genes) > 0) {
+            selected_genes
         } else {
             # Get first gene alphabetically as default
             all_genes <- sort(unique(values$expression_data$gene))
@@ -1863,41 +1970,57 @@ server <- function(input, output, session) {
         # Create data type label for column names
         data_type_label <- if (input$data_type == "log2_cpm") " (log2 CPM)" else " (VST)"
 
-        # Rename columns to include data type information
-        colnames(expression_subset) <- c(
-            "Sample", "Group",
-            paste0(colnames(expression_subset)[-(1:2)], data_type_label)
+        # Safely rename columns to handle special characters
+        original_colnames <- colnames(expression_subset)
+        gene_columns <- original_colnames[-(1:2)]  # Exclude Sample and Group columns
+        
+        # Create safe column names by cleaning special characters and adding data type
+        safe_colnames <- c(
+            "Sample", 
+            "Group",
+            paste0(make.names(gene_columns), data_type_label)
         )
+        
+        # Apply the safe column names
+        colnames(expression_subset) <- safe_colnames
 
-        # Create DT with formatting
-        DT::datatable(
-            expression_subset,
-            options = list(
-                pageLength = 25,
-                scrollX = TRUE,
-                scrollY = "600px",
-                scrollCollapse = TRUE,
-                dom = "Bfrtip",
-                buttons = c("copy", "csv", "excel"),
-                columnDefs = list(
-                    list(className = "dt-center", targets = "_all"),
-                    list(width = "120px", targets = c(0, 1)) # Fixed width for Sample and Group columns
-                )
-            ),
-            rownames = FALSE,
-            class = "compact stripe hover",
-            extensions = "Buttons"
-        ) %>%
-            DT::formatStyle(
-                "Group",
-                backgroundColor = DT::styleEqual(
-                    c(input$group1, input$group2),
-                    c(
-                        paste0("rgba(", paste(col2rgb(app_theme$plot_group1), collapse = ","), ",0.1)"),
-                        paste0("rgba(", paste(col2rgb(app_theme$plot_group2), collapse = ","), ",0.1)")
+        # Create DT with formatting and error handling
+        tryCatch({
+            DT::datatable(
+                expression_subset,
+                options = list(
+                    pageLength = 25,
+                    scrollX = TRUE,
+                    scrollY = "600px",
+                    scrollCollapse = TRUE,
+                    dom = "Bfrtip",
+                    buttons = c("copy", "csv", "excel"),
+                    columnDefs = list(
+                        list(className = "dt-center", targets = "_all"),
+                        list(width = "120px", targets = c(0, 1)) # Fixed width for Sample and Group columns
+                    )
+                ),
+                rownames = FALSE,
+                class = "compact stripe hover",
+                extensions = "Buttons"
+            ) %>%
+                DT::formatStyle(
+                    "Group",
+                    backgroundColor = DT::styleEqual(
+                        c(input$group1, input$group2),
+                        c(
+                            paste0("rgba(", paste(col2rgb(app_theme$plot_group1), collapse = ","), ",0.1)"),
+                            paste0("rgba(", paste(col2rgb(app_theme$plot_group2), collapse = ","), ",0.1)")
+                        )
                     )
                 )
-            )
+        }, error = function(e) {
+            # If DataTable creation fails, return a simple data frame
+            warning(paste("DataTable creation failed:", e$message))
+            return(data.frame(
+                Message = paste("Table display error. Data available but formatting failed:", e$message)
+            ))
+        })
     })
 
     # Download handler
@@ -1909,7 +2032,10 @@ server <- function(input, output, session) {
         content = function(file) {
             req(input$data_type, input$group1, input$group2)
 
-            if (length(input$selected_genes) == 0) {
+            # Use unified gene selection
+            selected_genes <- current_genes()
+            
+            if (is.null(selected_genes) || length(selected_genes) == 0) {
                 # Create a simple informational plot if no genes selected
                 p <- ggplot() +
                     annotate("text", x = 0.5, y = 0.5, label = "No genes selected for visualization", size = 8) +
@@ -1937,7 +2063,7 @@ server <- function(input, output, session) {
             # Join and filter for selected genes and data type (includes all celltypes for "Other" category)
             plot_data <- values$expression_data %>%
                 filter(
-                    gene %in% input$selected_genes,
+                    gene %in% selected_genes,
                     data_type == input$data_type
                 ) %>%
                 left_join(
@@ -1970,7 +2096,7 @@ server <- function(input, output, session) {
                 facet_wrap(~gene, scales = "free_y", nrow = 1) +
                 labs(
                     title = "Expression Distribution of Selected Genes",
-                    subtitle = paste0("Genes: ", paste(input$selected_genes, collapse = ", "), " (Data: ", data_type_label, ")"),
+                    subtitle = paste0("Genes: ", paste(selected_genes, collapse = ", "), " (Data: ", data_type_label, ")"),
                     x = NULL, # Remove x-axis label
                     y = y_label
                 ) +
@@ -1979,7 +2105,7 @@ server <- function(input, output, session) {
                     legend.position = "bottom",
                     plot.title = element_text(size = plot_theme$title_size, face = "bold", color = plot_theme$text_color),
                     plot.subtitle = element_text(size = plot_theme$subtitle_size, color = app_theme$text_light),
-                    axis.text.x = element_text(angle = 0, vjust = 0.5, hjust = 0.5, size = plot_theme$axis_text_size, color = plot_theme$text_color),
+                    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = plot_theme$axis_text_size, color = plot_theme$text_color),
                     axis.text.y = element_text(color = plot_theme$text_color),
                     axis.title = element_text(color = plot_theme$text_color),
                     strip.text = element_text(color = plot_theme$text_color, face = "bold"),
@@ -2000,9 +2126,12 @@ server <- function(input, output, session) {
     
     # Reactive for co-expression analysis
     coexpression_results <- eventReactive(input$run_coexpression, {
-        req(input$selected_genes, values$expression_data)
+        # Use unified gene selection
+        selected_genes <- current_genes()
         
-        if (length(input$selected_genes) < 3) {
+        req(selected_genes, values$expression_data)
+        
+        if (length(selected_genes) < 3) {
             showNotification("Please select at least 3 genes for co-expression analysis", 
                             type = "warning", duration = 5)
             return(NULL)
@@ -2014,7 +2143,7 @@ server <- function(input, output, session) {
             
             results <- find_coexpressed_genes(
                 expression_data = values$expression_data,
-                query_genes = input$selected_genes,
+                query_genes = selected_genes,
                 n_similar = input$n_similar_genes %||% 5,
                 min_correlation = input$min_correlation_coexpr %||% 0.6,
                 data_type = input$data_type,

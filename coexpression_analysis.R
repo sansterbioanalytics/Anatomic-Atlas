@@ -30,7 +30,7 @@ estimate_memory_requirements <- function(n_genes, n_samples) {
 }
 
 # 1. Calculate gene co-expression similarity (Parallelized Streaming Only)
-find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 5, 
+find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 10, 
                                  min_correlation = 0.6, data_type = "log2_cpm", 
                                  max_genes_batch = 1000, use_parallel = TRUE) {
     
@@ -469,19 +469,17 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
     parallel::clusterExport(cl, c("expr_filtered", "gene_batches", "min_correlation", "n_batches"), envir = environment())
     
     # Process all query genes in parallel
-    message(paste("Processing", length(available_query_genes), "query genes in parallel"))
+    # TODO: single-thread this part
+    message(paste("Processing", length(available_query_genes), "query genes sequentially"))
     
-    # Create data for parallel processing (include query gene index for progress reporting)
-    query_data <- data.frame(
-        query_idx = seq_along(available_query_genes),
-        query_gene = available_query_genes,
-        stringsAsFactors = FALSE
-    )
+    # Process query genes one by one (single-threaded)
+    similar_genes_list <- list()
     
-    similar_genes_list <- parallel::parLapply(cl, seq_len(nrow(query_data)), function(i) {
-        process_query_gene(query_data$query_idx[i], query_data$query_gene[i], 
-                          gene_batches, expr_filtered, min_correlation, n_batches)
-    })
+    for (i in seq_along(available_query_genes)) {
+        query_gene <- available_query_genes[i]
+        result <- process_query_gene(i, query_gene, gene_batches, expr_filtered, min_correlation, n_batches)
+        similar_genes_list[[query_gene]] <- result
+    }
     
     # Filter out NULL results and name the list
     names(similar_genes_list) <- available_query_genes
