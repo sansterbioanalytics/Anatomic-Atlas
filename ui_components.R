@@ -18,8 +18,9 @@ suppressPackageStartupMessages({
 # Create application header with logo
 create_app_header <- function(theme) {
     dashboardHeader(
-        title = div(
-            class = "logo-container",
+        title = "Anatomic RNA Atlas",
+        tags$li(
+            class = "dropdown logo-container",
             tags$a(
                 href = theme$logo_link_url,
                 target = "_blank",
@@ -309,10 +310,10 @@ create_coexpression_controls <- function() {
         ),
         numericInput("max_genes_batch",
             "Batch Size:",
-            value = 500,
+            value = 250,
             min = 100,
             max = 2000,
-            step = 100
+            step = 50
         ),
         checkboxInput("use_parallel",
             "Use parallel processing",
