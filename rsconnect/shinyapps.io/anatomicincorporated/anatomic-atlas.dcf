@@ -5,6 +5,6 @@ account: anatomicincorporated
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 15115863
-bundleId: 10670234
+bundleId: 10670296
 url: https://anatomicincorporated.shinyapps.io/anatomic-atlas/
 version: 1

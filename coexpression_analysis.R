@@ -953,7 +953,7 @@ create_coexpression_heatmap <- function(expression_data, query_genes, similar_ge
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     
     # Create y-axis labels with color coding for query genes
-    y_labels <- rownames(expr_matrix)
+    y_labels <- paste0(rownames(expr_matrix), " (", gene_types, ")")
     y_colors <- ifelse(gene_names %in% query_genes, "#DC143C", "#4A4A4A")  # Red for query genes, gray for similar genes
     
     # Create plotly heatmap
