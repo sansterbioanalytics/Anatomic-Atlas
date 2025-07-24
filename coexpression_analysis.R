@@ -952,11 +952,15 @@ create_coexpression_heatmap <- function(expression_data, query_genes, similar_ge
     # Create data type label
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     
+    # Create y-axis labels with color coding for query genes
+    y_labels <- rownames(expr_matrix)
+    y_colors <- ifelse(gene_names %in% query_genes, "#DC143C", "#4A4A4A")  # Red for query genes, gray for similar genes
+    
     # Create plotly heatmap
     plot_ly(
         z = expr_matrix,
         x = colnames(expr_matrix),
-        y = paste0(rownames(expr_matrix), " (", gene_types, ")"),
+        y = y_labels,
         type = "heatmap",
         colorscale = "Viridis",
         showscale = TRUE,
@@ -965,9 +969,20 @@ create_coexpression_heatmap <- function(expression_data, query_genes, similar_ge
         layout(
             title = paste("Co-Expression Heatmap:", length(query_genes), "Query +", 
                          length(similar_genes), "Similar Genes"),
-            xaxis = list(title = "Cell Types", side = "bottom"),
-            yaxis = list(title = "Genes"),
-            margin = list(l = 200, r = 50, t = 80, b = 80),
+            xaxis = list(
+                title = "Cell Types", 
+                side = "bottom",
+                tickangle = -90,  # Rotate x-axis labels 90 degrees
+                tickfont = list(size = 10)
+            ),
+            yaxis = list(
+                title = "Genes",
+                tickfont = list(
+                    size = 10,
+                    color = y_colors  # Color-code y-axis labels
+                )
+            ),
+            margin = list(l = 200, r = 50, t = 80, b = 120),  # Increased bottom margin for rotated labels
             font = list(size = 10)
         )
 }

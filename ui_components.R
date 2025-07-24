@@ -21,11 +21,13 @@ create_app_header <- function(theme) {
         title = "Anatomic RNA Atlas",
         tags$li(
             class = "dropdown logo-container",
+            style = "float: right; margin-right: 10px;",
             tags$a(
                 href = theme$logo_link_url,
                 target = "_blank",
                 class = "logo-link",
-                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo")
+                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
+                    style = "height: 40px; margin-top: 5px;")
             )
         )
     )

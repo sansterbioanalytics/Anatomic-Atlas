@@ -366,7 +366,7 @@ server <- function(input, output, session) {
         plot_data_base <- contrast_data()
 
         if (is.null(plot_data_base)) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Unable to load data for selected groups",
                     showarrow = FALSE
@@ -378,7 +378,7 @@ server <- function(input, output, session) {
         
         # Only plot if genes are selected
         if (is.null(genes_to_plot) || length(genes_to_plot) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Select genes to display expression plots",
                     showarrow = FALSE
@@ -398,7 +398,7 @@ server <- function(input, output, session) {
 
         # Check if we have data
         if (nrow(plot_data) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "No expression data available for selected genes",
                     showarrow = FALSE
@@ -501,7 +501,7 @@ server <- function(input, output, session) {
         selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Select genes or upload a gene set to display heatmap",
                     showarrow = FALSE
@@ -512,7 +512,7 @@ server <- function(input, output, session) {
         available_genes <- intersect(selected_genes, unique(values$expression_data$gene))
 
         if (length(available_genes) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = paste("No genes from selection found in dataset"),
                     showarrow = FALSE
@@ -523,7 +523,7 @@ server <- function(input, output, session) {
         plot_data_base <- contrast_data()
 
         if (is.null(plot_data_base)) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Unable to load data for selected groups",
                     showarrow = FALSE
@@ -537,7 +537,7 @@ server <- function(input, output, session) {
             pivot_wider(names_from = celltype, values_from = mean_expr, values_fill = 0)
 
         if (nrow(heatmap_data) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "No expression data available for selected groups",
                     showarrow = FALSE
@@ -1072,7 +1072,7 @@ server <- function(input, output, session) {
         selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Select genes to display group expression plot",
                     showarrow = FALSE
@@ -1266,7 +1266,7 @@ server <- function(input, output, session) {
 
         # Create DT with formatting and error handling
         tryCatch({
-            DT::datatable(
+            dt <- DT::datatable(
                 expression_subset,
                 options = list(
                     pageLength = 25,
@@ -1283,8 +1283,10 @@ server <- function(input, output, session) {
                 rownames = FALSE,
                 class = "compact stripe hover",
                 extensions = "Buttons"
-            ) %>%
-                DT::formatStyle(
+            )
+            # Only apply formatStyle if 'Group' column exists
+            if ("Group" %in% colnames(expression_subset)) {
+                dt <- dt %>% DT::formatStyle(
                     "Group",
                     backgroundColor = DT::styleEqual(
                         c(input$group1, input$group2),
@@ -1294,6 +1296,8 @@ server <- function(input, output, session) {
                         )
                     )
                 )
+            }
+            dt
         }, error = function(e) {
             # If DataTable creation fails, return a simple data frame
             warning(paste("DataTable creation failed:", e$message))
@@ -1543,7 +1547,7 @@ server <- function(input, output, session) {
         results <- coexpression_results()
         
         if (is.null(results) || nrow(results$similar_genes) == 0) {
-            return(plotly_empty() %>%
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Run co-expression analysis to see heatmap",
                     showarrow = FALSE
