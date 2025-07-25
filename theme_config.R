@@ -122,21 +122,67 @@ generate_app_css <- function(theme) {
 
         /* === ENHANCED HEADER STYLING === */
         .main-header {
-            height: 80px !important;
-            line-height: 80px !important;
+            height: 50px !important;
+            min-height: 50px !important;
+            max-height: 50px !important;
+        }
+        
+        .main-header .navbar {
+            height: 50px !important;
+            min-height: 50px !important;
+        }
+        
+        /* Fix hamburger menu height and positioning */
+        .main-header .sidebar-toggle {
+            height: 50px !important;
+            width: 50px !important;
+            padding: 12px 15px !important;
+            line-height: 26px !important;
+            font-size: 18px !important;
+        }
+        
+        /* Hide or minimize the sidebar toggle if not needed */
+        .main-header .sidebar-toggle {
+            display: none !important;
+        }
+        
+        /* Fix navbar content positioning */
+        .main-header .navbar-custom-menu {
+            height: 50px !important;
+            float: right !important;
         }
         
         .custom-header-container {
             background-color: ", theme$background_white, " !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 0 20px !important;
+            height: 50px !important;
+            line-height: 50px !important;
+            justify-content: flex-start !important;
+        }
+        
+        .header-logo-section {
+            height: 50px !important;
+            display: flex !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
+        }
+        
+        .header-center-section {
+            height: 50px !important;
+            display: flex !important;
+            align-items: center !important;
+            margin-left: 20px !important;
+            gap: 15px !important;
+            flex-grow: 0 !important;
         }
         
         .header-title {
             font-family: ", theme$font_family_primary, ";
-            text-align: center;
             text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            margin: 0 !important;
+            line-height: 1.2 !important;
         }
         
         /* === ENHANCED MODE SELECTOR STYLING === */

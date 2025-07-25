@@ -31,6 +31,7 @@ source("plot_utils.R")        # Plotting and visualization functions
 source("ui_components.R")     # Reusable UI components
 source("server_utils.R")      # Server helper functions
 source("coexpression_analysis.R") # Co-expression analysis functions
+source("product_groupings.R") # Product portfolio groupings configuration
 
 # =============================================================================
 # PRE-LOAD DATA (before UI creation)

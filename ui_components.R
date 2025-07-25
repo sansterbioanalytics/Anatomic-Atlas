@@ -18,10 +18,11 @@ suppressPackageStartupMessages({
 # Create application header with logo, title, and mode selector
 create_app_header <- function(theme) {
     dashboardHeader(
-        title = NULL,  # Remove default title to create custom header Review?
+        title = NULL,  # Remove default title to create custom header
+        titleWidth = 0,  # Remove title width to prevent spacing issues
         tags$li(
             class = "dropdown custom-header-container",
-            style = "width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; margin: 0;",
+            style = "width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 8px 20px; margin: 0; height: 50px;",
             
             # Left side: Logo
             div(
@@ -32,28 +33,22 @@ create_app_header <- function(theme) {
                     target = "_blank",
                     class = "logo-link",
                     img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
-                        style = "height: 45px; margin-right: 15px;")
+                        style = "height: 36px; margin-right: 15px;")
                 )
             ),
             
-            # Center: Title and Mode Selector
+            # Title and Mode Selector - left-aligned
             div(
                 class = "header-center-section",
-                style = "display: flex; flex-direction: column; align-items: center; flex-grow: 1; margin: 0 20px;",
+                style = "display: flex; align-items: center; margin-left: 20px; gap: 15px;",
                 
                 # Application Title
                 h2("Anatomic RNA Atlas", 
                    class = "header-title",
-                   style = paste0("margin: 0 0 8px 0; color: ", theme$text_primary, "; font-weight: 700; font-size: 24px; letter-spacing: -0.5px;")),
+                   style = paste0("margin: 0; color: ", theme$text_primary, "; font-weight: 700; font-size: 22px; letter-spacing: -0.5px;")),
                 
-                # Mode Selector Buttons
-                create_enhanced_mode_selector_ui(theme)
-            ),
-            
-            # Right side: Spacer (for balance)
-            div(
-                class = "header-spacer-section",
-                style = "width: 60px; flex-shrink: 0;"
+                # Mode Selector Buttons - Compact
+                create_compact_mode_selector_ui(theme)
             )
         )
     )
@@ -63,55 +58,52 @@ create_app_header <- function(theme) {
 # Mode Selector Component  
 # =============================================================================
 
-# Create enhanced mode selector UI component with large aesthetic buttons
-create_enhanced_mode_selector_ui <- function(theme) {
+# Create compact mode selector UI component for header
+create_compact_mode_selector_ui <- function(theme) {
     div(
-        class = "enhanced-mode-selector",
-        style = "display: flex; gap: 12px; align-items: center;",
+        class = "compact-mode-selector",
+        style = "display: flex; gap: 8px; align-items: center;",
         
-        # Target Mode Button
+        # Target Mode Button - Compact
         actionButton("mode_target",
-            HTML("<div style='display: flex; flex-direction: column; align-items: center;'>
-                    <i class='fa fa-bullseye' style='font-size: 18px; margin-bottom: 4px;'></i>
+            HTML("<div style='display: flex; align-items: center; gap: 6px;'>
+                    <i class='fa fa-bullseye' style='font-size: 14px;'></i>
                     <span style='font-weight: 600;'>Target Mode</span>
                   </div>"),
             class = "mode-button mode-target-btn",
             style = paste0("
                 background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
                 border: none;
-                border-radius: 12px;
+                border-radius: 8px;
                 color: white;
-                padding: 12px 24px;
-                font-size: 13px;
+                padding: 8px 16px;
+                font-size: 12px;
                 font-weight: 500;
-                box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
+                box-shadow: 0 2px 6px rgba(220, 20, 60, 0.3);
                 transition: all 0.3s ease;
                 cursor: pointer;
-                min-width: 120px;
-                height: 65px;
+                height: 36px;
             ")
         ),
         
-        # Explorer Mode Button  
+        # Explorer Mode Button - Compact
         actionButton("mode_explorer",
-            HTML("<div style='display: flex; flex-direction: column; align-items: center;'>
-                    <i class='fa fa-flask' style='font-size: 18px; margin-bottom: 4px;'></i>
+            HTML("<div style='display: flex; align-items: center; gap: 6px;'>
+                    <i class='fa fa-flask' style='font-size: 14px;'></i>
                     <span style='font-weight: 600;'>Explorer Mode</span>
-                    <small style='font-size: 10px; opacity: 0.8; margin-top: 2px;'>Beta</small>
                   </div>"),
             class = "mode-button mode-explorer-btn",
             style = paste0("
                 background: ", theme$background_light, ";
                 border: 2px solid ", theme$border_medium, ";
-                border-radius: 12px;
+                border-radius: 8px;
                 color: ", theme$text_secondary, ";
-                padding: 12px 24px;
-                font-size: 13px;
+                padding: 8px 16px;
+                font-size: 12px;
                 font-weight: 500;
                 transition: all 0.3s ease;
                 cursor: pointer;
-                min-width: 120px;
-                height: 65px;
+                height: 36px;
             ")
         ),
         
@@ -172,22 +164,19 @@ create_target_mode_controls <- function(theme) {
     div(
         class = "target-mode-controls",
         tagList(
-            # Simplified contrast selection (limit Group 1 to Real* products)
-            create_target_contrast_selection_ui(theme),
-            
-            # Simplified gene selection - focus on single/multiple gene input
+            # 1. Gene selection FIRST - primary control
             div(
                 class = "gene-selection-container",
                 create_target_gene_selection_ui(theme)
             ),
             
-            # Primary comparison checkbox (disabled by default)
+            # 2. Cell type selection with visual grouping
             div(
-                class = "primary-comparison-section",
-                create_primary_comparison_checkbox(theme)
+                class = "product-grouping-section",
+                create_product_grouping_ui(theme)
             ),
             
-            # Basic analysis options
+            # 3. Basic analysis options
             create_basic_analysis_options_ui(theme)
         )
     )
@@ -210,16 +199,60 @@ create_explorer_mode_controls <- function(theme) {
     )
 }
 
-# Target mode contrast selection - toggle-based cell type selector
-create_target_contrast_selection_ui <- function(theme) {
+# Product grouping selection - predefined cell type groups
+create_product_grouping_ui <- function(theme) {
     div(
-        class = "target-mode-contrast-container",
+        class = "product-grouping-container",
         style = paste0("margin: ", theme$spacing_lg, ";"),
         
         h5("Cell Type Selection", 
            style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
         
-        helpText("Toggle cell types to include/exclude from analysis. Real* products are enabled by default.",
+        helpText("Click cell types to enable/disable them for analysis. Real* products are selected by default:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        # Dynamic grouped cell type toggles will be populated by server
+        uiOutput("grouped_cell_type_toggles"),
+        
+        # Action buttons for group selection
+        div(
+            class = "group-action-buttons",
+            style = paste0("margin-top: ", theme$spacing_md, "; text-align: center;"),
+            
+            fluidRow(
+                column(4,
+                    actionButton("select_all_real", "All Real*", 
+                               class = "btn btn-sm btn-outline-primary btn-block",
+                               style = "font-size: 10px; padding: 4px 8px;")
+                ),
+                column(4,
+                    actionButton("select_all_types", "Select All", 
+                               class = "btn btn-sm btn-outline-success btn-block",
+                               style = "font-size: 10px; padding: 4px 8px;")
+                ),
+                column(4,
+                    actionButton("select_none", "Clear All", 
+                               class = "btn btn-sm btn-outline-secondary btn-block",
+                               style = "font-size: 10px; padding: 4px 8px;")
+                )
+            )
+        ),
+        
+        br()
+    )
+}
+
+# Target mode contrast selection - toggle-based cell type selector (moved to manual override)
+create_target_contrast_selection_ui <- function(theme) {
+    div(
+        class = "target-mode-contrast-container",
+        style = paste0("margin: ", theme$spacing_lg, ";"),
+        
+        h5("Manual Cell Type Override", 
+           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Override the product grouping above by manually toggling individual cell types:",
                 class = "help-text",
                 style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
         
@@ -254,25 +287,6 @@ create_target_gene_selection_ui <- function(theme) {
         uiOutput("target_genes_display"),
         
         br()
-    )
-}
-
-# Primary comparison checkbox component
-create_primary_comparison_checkbox <- function(theme) {
-    div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
-        h6("Additional Comparisons", 
-           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_sm, "; font-weight: bold;")),
-        checkboxInput("include_primary_comparison",
-            "Include Primary/hiPSC Cell Comparisons",
-            value = FALSE
-        ),
-        helpText("Adds primary cell data for reference (visually separated from Anatomic products)",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-top: ", theme$spacing_xs, ";")),
-        helpText("Disabled by default to focus on product portfolio",
-                class = "help-text", 
-                style = paste0("color: ", theme$text_light, "; font-size: 10px;"))
     )
 }
 
