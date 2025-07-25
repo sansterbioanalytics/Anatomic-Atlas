@@ -120,6 +120,168 @@ generate_app_css <- function(theme) {
             background-color: ", theme$background_light, " !important;
         }
 
+        /* === ENHANCED HEADER STYLING === */
+        .main-header {
+            height: 80px !important;
+            line-height: 80px !important;
+        }
+        
+        .custom-header-container {
+            background-color: ", theme$background_white, " !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        .header-title {
+            font-family: ", theme$font_family_primary, ";
+            text-align: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        
+        /* === ENHANCED MODE SELECTOR STYLING === */
+        .enhanced-mode-selector {
+            z-index: 1000;
+        }
+        
+        .mode-button {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            transform: translateY(0) !important;
+            position: relative !important;
+            overflow: hidden !important;
+        }
+        
+        .mode-button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        }
+        
+        .mode-button:active {
+            transform: translateY(0) !important;
+            transition: all 0.1s ease !important;
+        }
+        
+        .mode-target-btn.active,
+        .mode-target-btn:focus {
+            box-shadow: 0 6px 20px rgba(220, 20, 60, 0.4) !important;
+            outline: none !important;
+        }
+        
+        .mode-explorer-btn.active {
+            background: linear-gradient(135deg, ", theme$info_color, ", #1976D2) !important;
+            color: white !important;
+            border-color: ", theme$info_color, " !important;
+            box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3) !important;
+        }
+        
+        .mode-explorer-btn:hover {
+            background: ", theme$background_white, " !important;
+            border-color: ", theme$primary_color, " !important;
+            color: ", theme$primary_color, " !important;
+        }
+        
+        .mode-explorer-btn.active:hover {
+            background: linear-gradient(135deg, ", theme$info_color, ", #1565C0) !important;
+            color: white !important;
+        }
+
+        /* === MODE SELECTOR STYLING (Legacy) === */
+        .mode-selector-container {
+            background-color: transparent !important;
+        }
+        
+        .mode-selector-container .radio {
+            margin: 0 !important;
+            display: inline-block;
+        }
+        
+        .mode-selector-container .radio + .radio {
+            margin-left: 15px !important;
+        }
+        
+        .mode-selector-container label {
+            color: ", theme$text_primary, " !important;
+            font-weight: 500;
+            font-size: ", theme$font_size_small, ";
+            margin-bottom: 0 !important;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .mode-selector-container label:hover {
+            background-color: ", theme$background_light, " !important;
+        }
+        
+        .mode-selector-container input[type='radio']:checked + span {
+            color: ", theme$primary_color, " !important;
+            font-weight: bold;
+        }
+
+        /* === CELL TYPE TOGGLE STYLING === */
+        .cell-type-toggle-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .cell-type-toggle {
+            display: inline-block;
+            margin: 2px;
+        }
+        
+        .cell-type-toggle-btn {
+            padding: 8px 12px;
+            border: 2px solid #6c757d;
+            border-radius: 6px;
+            background-color: #6c757d;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 80px;
+            user-select: none;
+        }
+        
+        .cell-type-toggle-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .cell-type-toggle-btn.active {
+            background-color: ", theme$primary_color, ";
+            border-color: ", theme$primary_color, ";
+            color: white;
+            font-weight: bold;
+        }
+        
+        .cell-type-toggle-btn.inactive {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #ffffff;
+            opacity: 0.7;
+        }
+        
+        .cell-type-toggle-section {
+            margin-bottom: 16px;
+            padding: 12px;
+            border-radius: 6px;
+            background-color: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .cell-type-section-header {
+            color: ", theme$text_white, ";
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* === SIDEBAR STYLING === */
         .main-sidebar {
             background-color: ", theme$background_dark, " !important;
@@ -205,66 +367,6 @@ generate_app_css <- function(theme) {
             border-color: ", theme$secondary_color, " !important;
         }
 
-        /* === LOADING OVERLAY === */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(44, 62, 80, 0.95);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-
-        .loading-content {
-            text-align: center;
-            padding: ", theme$spacing_xxl, ";
-            background: ", theme$background_white, ";
-            border-radius: ", theme$radius_xl, ";
-            box-shadow: ", theme$shadow_heavy, ";
-            border: 2px solid ", theme$primary_color, ";
-        }
-
-        .loading-title {
-            color: ", theme$primary_color, ";
-            font-size: ", theme$font_size_h2, ";
-            font-weight: bold;
-            margin-bottom: ", theme$spacing_lg, ";
-            font-family: ", theme$font_family_primary, ";
-        }
-
-        .progress-container {
-            width: 300px;
-            height: 20px;
-            background-color: ", theme$background_light, ";
-            border-radius: ", theme$radius_lg, ";
-            overflow: hidden;
-            margin: ", theme$spacing_lg, " 0;
-            border: 1px solid ", theme$border_medium, ";
-        }
-
-        .progress-bar {
-            width: 0%;
-            height: 100%;
-            background: linear-gradient(90deg, ", theme$primary_color, ", ", theme$secondary_color, ");
-            transition: width 0.3s ease;
-        }
-
-        .loading-message {
-            color: ", theme$text_secondary, ";
-            margin: ", theme$spacing_md, " 0;
-            font-size: ", theme$font_size_body, ";
-        }
-
-        .loading-description {
-            color: ", theme$text_light, ";
-            font-size: ", theme$font_size_small, ";
-        }
-
         /* === LOGO STYLING === */
         .logo-container {
             display: flex;
@@ -314,28 +416,69 @@ generate_app_css <- function(theme) {
 
         /* === HELP TEXT AND INSTRUCTIONS === */
         .help-text {
-            color: ", theme$text_light, ";
-            font-size: ", theme$font_size_small, ";
+            color: ", theme$text_light, " !important;
+            font-size: ", theme$font_size_small, " !important;
             font-style: italic;
+            margin-bottom: ", theme$spacing_sm, " !important;
+            line-height: 1.4;
         }
 
         .instructions-header {
-            color: ", theme$text_primary, ";
+            color: ", theme$text_primary, " !important;
             font-weight: bold;
-            font-size: ", theme$font_size_h5, ";
+            font-size: ", theme$font_size_h5, " !important;
+            margin-bottom: ", theme$spacing_sm, " !important;
         }
 
         .statistics-header {
-            color: ", theme$text_primary, ";
+            color: ", theme$text_primary, " !important;
             font-weight: bold;
-            font-size: ", theme$font_size_h5, ";
-            margin-bottom: ", theme$spacing_sm, ";
+            font-size: ", theme$font_size_h5, " !important;
+            margin-bottom: ", theme$spacing_sm, " !important;
         }
 
+        /* === SHARED COMPONENT STYLING === */
         .analysis-stats-container {
-            max-height: 320px;
+            max-height: 480px;
             overflow-y: auto;
             padding-right: ", theme$spacing_sm, ";
+            border: 1px solid ", theme$border_light, ";
+            border-radius: ", theme$radius_sm, ";
+            background-color: ", theme$background_white, ";
+        }
+
+        .mode-specific-container {
+            padding: ", theme$spacing_md, ";
+            border-radius: ", theme$radius_md, ";
+            background-color: ", theme$background_light, ";
+            border: 1px solid ", theme$border_light, ";
+            margin-bottom: ", theme$spacing_md, ";
+        }
+
+        .target-mode-controls {
+            background-color: ", theme$background_dark, ";
+            padding: ", theme$spacing_lg, ";
+            border-radius: ", theme$radius_md, ";
+        }
+
+        .explorer-mode-controls {
+            background-color: ", theme$background_dark, ";
+            padding: ", theme$spacing_lg, ";
+            border-radius: ", theme$radius_md, ";
+        }
+
+        .primary-comparison-section {
+            border-top: 2px solid ", theme$border_medium, ";
+            padding-top: ", theme$spacing_md, ";
+            margin-top: ", theme$spacing_md, ";
+        }
+
+        .gene-selection-container {
+            background-color: rgba(220, 20, 60, 0.05);
+            border: 1px solid rgba(220, 20, 60, 0.2);
+            border-radius: ", theme$radius_sm, ";
+            padding: ", theme$spacing_md, ";
+            margin-bottom: ", theme$spacing_md, ";
         }
 
         .stat-card {
@@ -447,23 +590,48 @@ get_color_palette <- function(theme, n_colors = 3) {
 # JavaScript Generation Functions
 # =============================================================================
 
-# Generate JavaScript for progress handling and loading
+# Generate JavaScript for UI interactions
 generate_app_javascript <- function() {
     HTML("
-        Shiny.addCustomMessageHandler('updateProgress', function(data) {
-            document.getElementById('progress-bar').style.width = data.percent + '%';
-            document.getElementById('loading-message').textContent = data.message;
-        });
-
-        Shiny.addCustomMessageHandler('hideLoading', function(data) {
-            var overlay = document.getElementById('loading-overlay');
-            if (overlay) {
-                overlay.style.display = 'none';
+        <!-- Font Awesome for icons -->
+        <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'>
+        
+        <script>
+        $(document).ready(function() {
+            
+            // Enhanced Mode Selector Logic
+            var currentMode = 'target';
+            
+            function updateModeButtons(mode) {
+                $('.mode-button').removeClass('active');
+                if (mode === 'target') {
+                    $('.mode-target-btn').addClass('active');
+                    // Update the hidden radio button for compatibility
+                    $('input[name=\"app_mode\"][value=\"target\"]').prop('checked', true).trigger('change');
+                } else {
+                    $('.mode-explorer-btn').addClass('active');
+                    $('input[name=\"app_mode\"][value=\"explorer\"]').prop('checked', true).trigger('change');
+                }
+                currentMode = mode;
             }
-        });
-
-        Shiny.addCustomMessageHandler('addProgressHandlers', function(data) {
-            // Any additional JavaScript setup can go here
+            
+            // Initialize mode selector
+            updateModeButtons('target');
+            
+            // Handle mode button clicks
+            $('#mode_target').on('click', function(e) {
+                e.preventDefault();
+                if (currentMode !== 'target') {
+                    updateModeButtons('target');
+                }
+            });
+            
+            $('#mode_explorer').on('click', function(e) {
+                e.preventDefault();
+                if (currentMode !== 'explorer') {
+                    updateModeButtons('explorer');
+                }
+            });
         });
         
         // Auto-scroll coexpression log to bottom when updated
@@ -477,6 +645,7 @@ generate_app_javascript <- function() {
                 }
             }
         });
+        </script>
     ")
 }
 

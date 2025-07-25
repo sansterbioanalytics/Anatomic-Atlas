@@ -33,6 +33,24 @@ source("server_utils.R")      # Server helper functions
 source("coexpression_analysis.R") # Co-expression analysis functions
 
 # =============================================================================
+# PRE-LOAD DATA (before UI creation)
+# =============================================================================
+cat("=== PRE-LOADING DATA ===\n")
+atlas_data_global <- load_atlas_data(progress = list(
+    set = function(message = "", value = 0) {
+        cat("Progress:", message, "(", round(value * 100), "%)\n")
+    }
+))
+gene_sets_global <- load_gene_sets()
+
+if (is.null(atlas_data_global$sample_data) || is.null(atlas_data_global$expression_data)) {
+    stop("Failed to load atlas data. Please check data files.")
+}
+
+cat("Data pre-loaded successfully! Sample rows:", nrow(atlas_data_global$sample_data), "Expression rows:", nrow(atlas_data_global$expression_data), "\n")
+cat("=== DATA PRE-LOADING COMPLETE ===\n")
+
+# =============================================================================
 # UI Definition
 # =============================================================================
 
@@ -47,9 +65,6 @@ ui <- dashboardPage(
             tags$script(generate_app_javascript())
         ),
 
-        # Loading overlay (initially visible)
-        create_loading_overlay(app_theme),
-
         # Main content layout
         create_main_layout(app_theme),
         
@@ -63,78 +78,136 @@ ui <- dashboardPage(
 # =============================================================================
 
 server <- function(input, output, session) {
-    # Load data on startup with progress
-    atlas_data <- NULL
-    gene_sets <- load_gene_sets()
+    # Use pre-loaded data
+    gene_sets <- gene_sets_global
 
-    # Reactive values
+    # Reactive values - initialize with pre-loaded data
     values <- reactiveValues(
-        sample_data = NULL,
-        expression_data = NULL,
+        sample_data = atlas_data_global$sample_data,
+        expression_data = atlas_data_global$expression_data,
         contrast_data = NULL,
         uploaded_genes = NULL,
-        data_loaded = FALSE,
-        gene_page = 1  # Current page for gene pagination (always 10 genes per page)
+        data_loaded = TRUE,  # Already loaded!
+        gene_page = 1,  # Current page for gene pagination (always 10 genes per page)
+        app_mode = "target",  # Track current application mode
+        cell_type_toggles = list()  # Track cell type toggle states for target mode
     )
 
-    # Load data with progress indication
-    observe({
-        tryCatch(
-            {
-                # Use JavaScript to show loading progress
-                session$sendCustomMessage("updateProgress", list(percent = 10, message = "Starting data load..."))
+    cat("Server initialized with pre-loaded data\n")
 
-                atlas_data <- load_atlas_data(progress = list(
-                    set = function(message = "", value = 0) {
-                        session$sendCustomMessage("updateProgress", list(
-                            percent = value * 100,
-                            message = message
-                        ))
+    # Mode switching observer - handles both button clicks and radio inputs
+    observe({
+        # Handle mode button clicks
+        if (!is.null(input$mode_target)) {
+            values$app_mode <- "target"
+        }
+        if (!is.null(input$mode_explorer)) {
+            values$app_mode <- "explorer"
+        }
+        
+        # Handle radio button changes (for compatibility)
+        if (!is.null(input$app_mode)) {
+            values$app_mode <- input$app_mode
+        }
+        
+        # Re-update choices when mode changes
+        if (!is.null(values$sample_data)) {
+            celltype_col <- get_celltype_column(values$sample_data)
+            
+            if (!is.null(celltype_col)) {
+                cell_types <- unique(values$sample_data[[celltype_col]])
+                
+                if (values$app_mode == "target") {
+                    # Initialize toggle states for target mode
+                    if (length(values$cell_type_toggles) == 0) {
+                        # Set default toggle states: Real* = TRUE, others = FALSE
+                        toggle_states <- list()
+                        for (cell_type in cell_types) {
+                            toggle_states[[cell_type]] <- grepl("^Real", cell_type, ignore.case = TRUE)
+                        }
+                        values$cell_type_toggles <- toggle_states
                     }
-                ))
+                } else {
+                    # Explorer mode: use traditional dropdowns
+                    updateSelectInput(session, "group1",
+                        choices = cell_types,
+                        selected = cell_types[1]
+                    )
 
-                if (is.null(atlas_data$sample_data) || is.null(atlas_data$expression_data)) {
-                    session$sendCustomMessage("updateProgress", list(
-                        percent = 100,
-                        message = "Error: Could not load data files"
-                    ))
-                    showNotification("Failed to load atlas data. Please check data files.", type = "error", duration = NULL)
-                    return()
+                    updateSelectInput(session, "group2",
+                        choices = cell_types,
+                        selected = if (length(cell_types) > 1) cell_types[2] else cell_types[1]
+                    )
                 }
-
-                values$sample_data <- atlas_data$sample_data
-                values$expression_data <- atlas_data$expression_data
-                values$data_loaded <- TRUE
-
-                # Hide loading overlay
-                session$sendCustomMessage("hideLoading", list())
-            },
-            error = function(e) {
-                session$sendCustomMessage("updateProgress", list(
-                    percent = 100,
-                    message = paste("Error loading data:", e$message)
-                ))
-                showNotification(paste("Error loading data:", e$message), type = "error", duration = NULL)
             }
-        )
-    })
-
-    # Add JavaScript handlers for loading progress
-    observe({
-        session$sendCustomMessage("addProgressHandlers", list())
+        }
     })
 
     # Reactive expression for pre-filtered contrast data
     contrast_data <- reactive({
-        req(values$expression_data, values$sample_data, input$group1, input$group2, input$data_type)
+        req(values$expression_data, values$sample_data, input$data_type)
+        
+        # Handle different modes
+        if (values$app_mode == "target") {
+            # Target mode: use toggle states to determine included cell types
+            if (length(values$cell_type_toggles) == 0) return(NULL)
+            
+            # Get enabled cell types
+            enabled_cell_types <- names(values$cell_type_toggles)[sapply(values$cell_type_toggles, function(x) x == TRUE)]
+            
+            if (length(enabled_cell_types) == 0) return(NULL)
+            
+            # For target mode, create a data frame similar to explorer mode
+            celltype_col <- get_celltype_column(values$sample_data)
+            sample_col <- get_sample_column(values$sample_data)
+            
+            if (is.null(celltype_col) || is.null(sample_col)) return(NULL)
+            
+            # Get samples for enabled cell types
+            target_samples <- values$sample_data %>%
+                filter(!!sym(celltype_col) %in% enabled_cell_types)
+            
+            if (nrow(target_samples) == 0) return(NULL)
+            
+            # Filter expression data for target samples and data type
+            target_expression <- values$expression_data %>%
+                filter(
+                    sample %in% target_samples[[sample_col]],
+                    data_type == input$data_type
+                ) %>%
+                left_join(
+                    target_samples %>%
+                        select(all_of(c(sample_col, celltype_col))) %>%
+                        rename(sample = !!sample_col, celltype = !!celltype_col),
+                    by = "sample"
+                ) %>%
+                mutate(
+                    # Create violin_group for consistency with explorer mode
+                    violin_group = celltype
+                )
+            
+            return(target_expression)
+        } else {
+            # Explorer mode: use traditional group1/group2 logic
+            req(input$group1, input$group2)
+            
+            create_contrast_data(
+                values$expression_data,
+                values$sample_data,
+                input$group1,
+                input$group2,
+                input$data_type
+            )
+        }
+    })
 
-        create_contrast_data(
-            values$expression_data,
-            values$sample_data,
-            input$group1,
-            input$group2,
-            input$data_type
-        )
+    # Reactive expression for currently active cell types (target mode)
+    active_cell_types <- reactive({
+        if (values$app_mode == "target" && length(values$cell_type_toggles) > 0) {
+            enabled_types <- names(values$cell_type_toggles)[sapply(values$cell_type_toggles, function(x) x == TRUE)]
+            return(enabled_types)
+        }
+        return(NULL)
     })
 
     # Update choices when data is loaded
@@ -145,16 +218,23 @@ server <- function(input, output, session) {
 
             if (!is.null(celltype_col)) {
                 cell_types <- unique(values$sample_data[[celltype_col]])
+                
+                # Handle different modes
+                if (values$app_mode == "target") {
+                    # Target mode: create toggle-based UI instead of dropdowns
+                    # Initialize toggle states will be handled by renderUI
+                } else {
+                    # Explorer mode: all cell types available for both groups
+                    updateSelectInput(session, "group1",
+                        choices = cell_types,
+                        selected = cell_types[1]
+                    )
 
-                updateSelectInput(session, "group1",
-                    choices = cell_types,
-                    selected = cell_types[1]
-                )
-
-                updateSelectInput(session, "group2",
-                    choices = cell_types,
-                    selected = if (length(cell_types) > 1) cell_types[2] else cell_types[1]
-                )
+                    updateSelectInput(session, "group2",
+                        choices = cell_types,
+                        selected = if (length(cell_types) > 1) cell_types[2] else cell_types[1]
+                    )
+                }
             }
         }
 
@@ -163,7 +243,15 @@ server <- function(input, output, session) {
             genes <- unique(values$expression_data$gene)
             # Set default to "SCN11A" if present, otherwise NULL
             default_gene <- if ("SCN11A" %in% genes) "SCN11A" else NULL
+            
+            # Update gene choices for both modes
             updateSelectizeInput(session, "selected_genes",
+                choices = genes,
+                selected = default_gene,
+                server = TRUE
+            )
+            
+            updateSelectizeInput(session, "target_gene_input",
                 choices = genes,
                 selected = default_gene,
                 server = TRUE
@@ -191,13 +279,20 @@ server <- function(input, output, session) {
 
     # Reactive expression for currently selected genes (unified across all plots)
     current_genes <- reactive({
-        if (input$gene_set_selection == "Custom Genes") {
-            return(input$selected_genes)
-        } else if (input$gene_set_selection == "Uploaded Gene Set") {
-            return(values$uploaded_genes)
+        # Handle different modes
+        if (values$app_mode == "target") {
+            # Target mode uses simple gene input
+            return(input$target_gene_input)
         } else {
-            # Using a predefined gene set
-            return(gene_sets[[input$gene_set_selection]])
+            # Explorer mode uses existing gene set logic
+            if (input$gene_set_selection == "Custom Genes") {
+                return(input$selected_genes)
+            } else if (input$gene_set_selection == "Uploaded Gene Set") {
+                return(values$uploaded_genes)
+            } else {
+                # Using a predefined gene set
+                return(gene_sets[[input$gene_set_selection]])
+            }
         }
     })
     
@@ -300,6 +395,108 @@ server <- function(input, output, session) {
             br(),
             tags$em(paste("Source:", gene_source))
         )
+    })
+
+    # Display target genes information (for target mode)
+    output$target_genes_display <- renderUI({
+        genes <- input$target_gene_input
+        
+        if (is.null(genes) || length(genes) == 0) {
+            return(div(
+                style = paste0("color: ", app_theme$text_light, "; font-size: ", app_theme$font_size_small, ";"),
+                "No target genes selected"
+            ))
+        }
+        
+        div(
+            style = paste0("color: ", app_theme$text_white, "; font-size: ", app_theme$font_size_small, "; margin-bottom: ", app_theme$spacing_sm, ";"),
+            tags$strong(paste(length(genes), "target genes selected")),
+            br(),
+            tags$em(paste("Genes:", paste(genes, collapse = ", ")))
+        )
+    })
+
+    # Render cell type toggles for target mode
+    output$cell_type_toggles <- renderUI({
+        req(values$sample_data)
+        
+        # Only render for target mode
+        if (values$app_mode != "target") return(NULL)
+        
+        celltype_col <- get_celltype_column(values$sample_data)
+        if (is.null(celltype_col)) return(NULL)
+        
+        cell_types <- unique(values$sample_data[[celltype_col]])
+        
+        # Initialize toggle states if not already set
+        if (length(values$cell_type_toggles) == 0) {
+            # Set defaults: Real* products enabled, primary/hiPSC disabled
+            toggle_states <- sapply(cell_types, function(ct) {
+                # Enable Real* products by default
+                if (grepl("^Real", ct, ignore.case = TRUE)) {
+                    return(TRUE)
+                }
+                # Disable primary human and hiPSC by default
+                if (grepl("primary|hipsc|ips", ct, ignore.case = TRUE)) {
+                    return(FALSE)
+                }
+                # Enable other cell types by default
+                return(TRUE)
+            })
+            values$cell_type_toggles <- as.list(toggle_states)
+        }
+        
+        # Group cell types for better organization
+        real_products <- cell_types[grepl("^Real", cell_types, ignore.case = TRUE)]
+        primary_cells <- cell_types[grepl("primary|hipsc|ips", cell_types, ignore.case = TRUE)]
+        other_cells <- cell_types[!cell_types %in% c(real_products, primary_cells)]
+        
+        # Create toggle buttons
+        create_toggle_section <- function(section_title, cell_list, section_id) {
+            if (length(cell_list) == 0) return(NULL)
+            
+            div(
+                class = "cell-type-toggle-section",
+                div(class = "cell-type-section-header", section_title),
+                div(
+                    class = "cell-type-toggle-container",
+                    lapply(cell_list, function(ct) {
+                        is_active <- values$cell_type_toggles[[ct]] %||% FALSE
+                        button_class <- if (is_active) "cell-type-toggle-btn active" else "cell-type-toggle-btn inactive"
+                        
+                        div(
+                            class = "cell-type-toggle",
+                            tags$button(
+                                class = button_class,
+                                id = paste0("toggle_", gsub("[^A-Za-z0-9]", "_", ct)),
+                                onclick = paste0("Shiny.setInputValue('cell_type_toggle', {cell_type: '", ct, "', state: !", is_active, "}, {priority: 'event'});"),
+                                ct
+                            )
+                        )
+                    })
+                )
+            )
+        }
+        
+        tagList(
+            create_toggle_section("Anatomic Products (Real*)", real_products, "real"),
+            create_toggle_section("Primary/hiPSC References", primary_cells, "primary"),
+            if (length(other_cells) > 0) create_toggle_section("Other Cell Types", other_cells, "other")
+        )
+    })
+
+    # Handle cell type toggle clicks
+    observeEvent(input$cell_type_toggle, {
+        if (!is.null(input$cell_type_toggle$cell_type)) {
+            cell_type <- input$cell_type_toggle$cell_type
+            new_state <- input$cell_type_toggle$state
+            
+            # Update the toggle state
+            values$cell_type_toggles[[cell_type]] <- new_state
+            
+            # Trigger re-render of the toggles UI
+            # The renderUI will automatically reflect the new states
+        }
     })
 
     # Handle file upload for custom gene sets
@@ -588,10 +785,23 @@ server <- function(input, output, session) {
 
     # Render dynamic comparison title
     output$contrast_title <- renderText({
-        if (is.null(input$group1) || is.null(input$group2)) {
-            return("Select groups for comparison")
+        if (values$app_mode == "target") {
+            # Target mode: show active cell types
+            active_types <- active_cell_types()
+            if (is.null(active_types) || length(active_types) == 0) {
+                return("Select cell types using toggles")
+            } else if (length(active_types) == 1) {
+                return(paste("Analysis for:", active_types[1]))
+            } else {
+                return(paste("Analysis for", length(active_types), "cell types"))
+            }
+        } else {
+            # Explorer mode: traditional group comparison
+            if (is.null(input$group1) || is.null(input$group2)) {
+                return("Select groups for comparison")
+            }
+            paste("Comparing:", input$group1, "vs", input$group2)
         }
-        paste("Comparing:", input$group1, "vs", input$group2)
     })
 
     # Add comprehensive data summary output as UI components
@@ -988,14 +1198,21 @@ server <- function(input, output, session) {
                 "Gene",
                 fontWeight = "bold",
                 color = app_theme$primary_color
-            ) %>%
-            DT::formatStyle(
-                "Group",
-                backgroundColor = DT::styleEqual(
-                    c(input$group1, input$group2),
-                    c("rgba(220, 20, 60, 0.1)", "rgba(31, 98, 165, 0.1)")
-                )
             )
+        
+        # Only add group formatting in explorer mode
+        if (values$app_mode == "explorer" && !is.null(input$group1) && !is.null(input$group2)) {
+            dt <- dt %>%
+                DT::formatStyle(
+                    "Group",
+                    backgroundColor = DT::styleEqual(
+                        c(input$group1, input$group2),
+                        c("rgba(220, 20, 60, 0.1)", "rgba(31, 98, 165, 0.1)")
+                    )
+                )
+        }
+        
+        return(dt)
     })
 
     # Overall statistics UI component (when no genes selected)
@@ -1013,7 +1230,26 @@ server <- function(input, output, session) {
         data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM+1)" else "VST"
 
         # Show overall dataset statistics for the contrast groups
-        expr_values <- contrast_expression$expression
+        # Safely extract expression values, handling both data frame and list structures
+        expr_values <- if (is.data.frame(contrast_expression)) {
+            contrast_expression$expression
+        } else if (is.list(contrast_expression) && "expression" %in% names(contrast_expression)) {
+            contrast_expression$expression
+        } else {
+            return(div(
+                class = "stat-card",
+                div("Unable to extract expression data", class = "stat-card-content")
+            ))
+        }
+        
+        # Ensure expr_values is numeric
+        if (!is.numeric(expr_values) || length(expr_values) == 0) {
+            return(div(
+                class = "stat-card",
+                div("No numeric expression data available", class = "stat-card-content")
+            ))
+        }
+        
         quantiles <- quantile(expr_values, probs = c(0.05, 0.25, 0.5, 0.75, 0.95), na.rm = TRUE)
         mean_expr <- mean(expr_values, na.rm = TRUE)
         zero_count <- sum(expr_values <= 0.1, na.rm = TRUE)
@@ -1284,8 +1520,8 @@ server <- function(input, output, session) {
                 class = "compact stripe hover",
                 extensions = "Buttons"
             )
-            # Only apply formatStyle if 'Group' column exists
-            if ("Group" %in% colnames(expression_subset)) {
+            # Only apply formatStyle if 'Group' column exists and we're in explorer mode
+            if ("Group" %in% colnames(expression_subset) && values$app_mode == "explorer" && !is.null(input$group1) && !is.null(input$group2)) {
                 dt <- dt %>% DT::formatStyle(
                     "Group",
                     backgroundColor = DT::styleEqual(
@@ -1403,6 +1639,51 @@ server <- function(input, output, session) {
             ggsave(file, plot = p, width = 12, height = 8, dpi = 300)
         }
     )
+    
+    # =============================================================================
+    # Target Mode Server Logic - Placeholder Outputs
+    # =============================================================================
+    
+    # Portfolio ranking plot for target mode
+    output$portfolio_ranking_plot <- renderPlotly({
+        # Placeholder implementation - will be enhanced in later phases
+        plotly_empty() %>%
+            layout(
+                title = "Portfolio Expression Ranking",
+                annotations = list(
+                    text = "Portfolio ranking visualization<br>Coming in Phase 4",
+                    x = 0.5, y = 0.5,
+                    showarrow = FALSE,
+                    font = list(size = 16)
+                )
+            )
+    })
+    
+    # Portfolio summary table for target mode
+    output$portfolio_summary_table <- DT::renderDataTable({
+        # Placeholder implementation
+        data.frame(
+            Product = c("Product 1", "Product 2", "Product 3"),
+            Expression = c("High", "Medium", "Low"),
+            Ranking = c(1, 2, 3),
+            Note = c("Placeholder data", "Placeholder data", "Placeholder data")
+        )
+    }, options = list(dom = "t"), rownames = FALSE)
+    
+    # Target gene heatmap for target mode
+    output$target_gene_heatmap <- renderPlotly({
+        # Placeholder implementation - will be enhanced in later phases
+        plotly_empty() %>%
+            layout(
+                title = "Gene Heatmap: Genes (X) vs Products (Y)",
+                annotations = list(
+                    text = "Gene heatmap visualization<br>Coming in Phase 4",
+                    x = 0.5, y = 0.5,
+                    showarrow = FALSE,
+                    font = list(size = 16)
+                )
+            )
+    })
     
     # =============================================================================
     # Co-Expression Analysis Server Logic

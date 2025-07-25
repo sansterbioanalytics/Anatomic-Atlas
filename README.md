@@ -2,6 +2,8 @@
 
 A streamlined R Shiny application for interactive exploration of RNA-seq expression data across different cell types in the Anatomic Atlas.
 
+https://anatomicincorporated.shinyapps.io/anatomic-atlas/
+
 ## Features
 
 - **Simple Interface**: Single-file application that's easy to deploy and maintain
@@ -34,10 +36,10 @@ The application expects data in the following format:
    # conda environment recommended for local development
    # conda create -n atlas r-base=4.3 r-devtools r-shiny r-dplyr r-matrix r-mass r-lattice r-readr xz zlib quarto
    # In RStudio
-   shiny::runApp("simple_app.R")
+   shiny::runApp("app.R")
    
    # Or from command line
-   Rscript -e "shiny::runApp('simple_app.R', host='0.0.0.0', port=3838)"
+   Rscript -e "shiny::runApp('app.R', host='0.0.0.0', port=3838)"
    ```
 
 ## Deployment
