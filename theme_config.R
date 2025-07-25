@@ -17,7 +17,7 @@ app_theme <- list(
     # === CORE BRAND COLORS ===
     primary_color = "#DC143C", # Crimson red - main accent color
     secondary_color = "#8B0000", # Dark red - secondary accent
-    tertiary_color = "#FFB6C1", # Light pink - subtle accent
+    accent_color = "#FFB6C1", # Light pink - subtle accent
 
     # === NEUTRAL COLORS ===
     background_white = "#FFFFFF", # Pure white backgrounds
@@ -156,7 +156,7 @@ generate_app_css <- function(theme) {
             background-color: ", theme$background_white, " !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 0 20px !important;
+            padding: 0 !important;
             height: 50px !important;
             line-height: 50px !important;
             justify-content: flex-start !important;
@@ -266,30 +266,38 @@ generate_app_css <- function(theme) {
 
         /* === CELL TYPE TOGGLE STYLING === */
         .cell-type-toggle-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
             margin-bottom: 12px;
+            max-width: 100%;
+            overflow: hidden;
         }
         
         .cell-type-toggle {
-            display: inline-block;
-            margin: 2px;
+            display: block;
+            margin: 0;
+            min-width: 0; /* Allow flex items to shrink */
         }
         
         .cell-type-toggle-btn {
-            padding: 8px 12px;
+            padding: 6px 8px;
             border: 2px solid #6c757d;
             border-radius: 6px;
             background-color: #6c757d;
             color: white;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
             text-align: center;
-            min-width: 80px;
+            width: 100%;
+            max-width: 100%;
             user-select: none;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-sizing: border-box;
         }
         
         .cell-type-toggle-btn:hover {
@@ -313,7 +321,7 @@ generate_app_css <- function(theme) {
         
         .cell-type-toggle-section {
             margin-bottom: 16px;
-            padding: 12px;
+            padding: 16px;
             border-radius: 6px;
             background-color: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
@@ -331,11 +339,15 @@ generate_app_css <- function(theme) {
         /* === SIDEBAR STYLING === */
         .main-sidebar {
             background-color: ", theme$background_dark, " !important;
+            max-width: 300px;
+            overflow-x: hidden;
         }
 
         .sidebar {
             background-color: ", theme$background_dark, " !important;
             color: ", theme$text_white, ";
+            padding-right: 15px;
+            box-sizing: border-box;
         }
 
         .sidebar-menu > li > a {
@@ -346,6 +358,152 @@ generate_app_css <- function(theme) {
         .sidebar-menu > li > a:hover {
             background-color: ", theme$primary_color, " !important;
             border-left-color: ", theme$secondary_color, ";
+        }
+
+        /* === ENHANCED SIDEBAR FORM CONTROLS === */
+        .sidebar .form-group {
+            margin-bottom: ", theme$spacing_lg, ";
+            max-width: 100%;
+            overflow: hidden;
+        }
+        
+        .sidebar .form-group label {
+            color: ", theme$text_white, " !important;
+            font-weight: 600;
+            font-size: ", theme$font_size_body, ";
+            margin-bottom: ", theme$spacing_sm, ";
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .sidebar .form-control {
+            background-color: ", theme$background_white, " !important;
+            border: 1px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_sm, " !important;
+            color: ", theme$text_primary, " !important;
+            font-size: ", theme$font_size_body, " !important;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .sidebar .form-control:focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25) !important;
+        }
+        
+        .sidebar .selectize-input {
+            background-color: ", theme$background_white, " !important;
+            border: 1px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_sm, " !important;
+            color: ", theme$text_primary, " !important;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .sidebar .selectize-input.focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25) !important;
+        }
+        
+        .sidebar .radio {
+            margin-bottom: ", theme$spacing_sm, " !important;
+        }
+        
+        .sidebar .radio label {
+            color: ", theme$text_white, " !important;
+            font-weight: normal !important;
+            font-size: ", theme$font_size_body, " !important;
+            margin-bottom: 0 !important;
+            padding-left: 20px;
+        }
+        
+        .sidebar .radio input[type=\"radio\"] {
+            margin-top: 2px;
+        }
+        
+        .sidebar h4, .sidebar h5 {
+            color: ", theme$text_white, " !important;
+            font-weight: bold !important;
+            margin-bottom: ", theme$spacing_md, " !important;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: ", theme$font_size_h5, " !important;
+        }
+        
+        .sidebar .help-text {
+            color: ", theme$text_light, " !important;
+            font-size: ", theme$font_size_small, " !important;
+            line-height: 1.4;
+            margin-bottom: ", theme$spacing_sm, " !important;
+        }
+        
+        /* === SECTION DIVIDERS === */
+        .gene-selection-container,
+        .product-grouping-section {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: ", theme$spacing_lg, ";
+            margin-bottom: ", theme$spacing_lg, ";
+            max-width: 100%;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        
+        .gene-selection-container:last-child,
+        .product-grouping-section:last-child {
+            border-bottom: none;
+        }
+        
+        .product-grouping-container {
+            max-width: 100%;
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        
+        /* === SIDEBAR ACTION BUTTONS === */
+        .sidebar .btn {
+            border-radius: ", theme$radius_sm, " !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .sidebar .btn-outline-primary {
+            border-color: ", theme$primary_color, " !important;
+            color: ", theme$primary_color, " !important;
+            background-color: ", theme$background_white, " !important;
+        }
+        
+        .sidebar .btn-outline-primary:hover {
+            background-color: ", theme$primary_color, " !important;
+            color: ", theme$text_white, " !important;
+        }
+        
+        .sidebar .btn-outline-success {
+            border-color: ", theme$success_color, " !important;
+            color: ", theme$success_color, " !important;
+            background-color: ", theme$background_white, " !important;
+        }
+        
+        .sidebar .btn-outline-success:hover {
+            background-color: ", theme$success_color, " !important;
+            color: ", theme$text_white, " !important;
+        }
+        
+        .sidebar .btn-outline-secondary {
+            border-color: ", theme$border_dark, " !important;
+            color: ", theme$text_light, " !important;
+            background-color: ", theme$background_white, " !important;
+        }
+        
+        .sidebar .btn-outline-secondary:hover {
+            background-color: ", theme$border_dark, " !important;
+            color: ", theme$text_white, " !important;
+        }
+        
+        .group-action-buttons {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: ", theme$spacing_md, ";
         }
 
         /* === CONTENT AREA === */
@@ -649,33 +807,42 @@ generate_app_javascript <- function() {
             var currentMode = 'target';
             
             function updateModeButtons(mode) {
-                $('.mode-button').removeClass('active');
+                // Remove active class from all mode buttons
+                $('.mode-target-btn, .mode-explorer-btn').removeClass('active');
+                
                 if (mode === 'target') {
                     $('.mode-target-btn').addClass('active');
-                    // Update the hidden radio button for compatibility
-                    $('input[name=\"app_mode\"][value=\"target\"]').prop('checked', true).trigger('change');
-                } else {
+                    // Update the hidden radio button
+                    $('input[name=\"app_mode\"][value=\"target\"]').prop('checked', true);
+                } else if (mode === 'explorer') {
                     $('.mode-explorer-btn').addClass('active');
-                    $('input[name=\"app_mode\"][value=\"explorer\"]').prop('checked', true).trigger('change');
+                    // Update the hidden radio button
+                    $('input[name=\"app_mode\"][value=\"explorer\"]').prop('checked', true);
                 }
                 currentMode = mode;
+                console.log('Mode updated to:', mode); // Debug log
             }
             
             // Initialize mode selector
             updateModeButtons('target');
             
             // Handle mode button clicks
-            $('#mode_target').on('click', function(e) {
+            $(document).on('click', '#mode_target', function(e) {
                 e.preventDefault();
-                if (currentMode !== 'target') {
-                    updateModeButtons('target');
-                }
+                console.log('Target mode clicked'); // Debug log
+                updateModeButtons('target');
             });
             
-            $('#mode_explorer').on('click', function(e) {
+            $(document).on('click', '#mode_explorer', function(e) {
                 e.preventDefault();
-                if (currentMode !== 'explorer') {
-                    updateModeButtons('explorer');
+                console.log('Explorer mode clicked'); // Debug log
+                updateModeButtons('explorer');
+            });
+            
+            // Listen for Shiny input changes and update visual state accordingly
+            $(document).on('shiny:inputchanged', function(event) {
+                if (event.name === 'app_mode') {
+                    updateModeButtons(event.value);
                 }
             });
         });

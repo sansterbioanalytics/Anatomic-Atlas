@@ -22,12 +22,12 @@ create_app_header <- function(theme) {
         titleWidth = 0,  # Remove title width to prevent spacing issues
         tags$li(
             class = "dropdown custom-header-container",
-            style = "width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 8px 20px; margin: 0; height: 50px;",
+            style = "width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0; margin: 0; height: 50px;",
             
             # Left side: Logo
             div(
                 class = "header-logo-section",
-                style = "display: flex; align-items: center; flex-shrink: 0;",
+                style = "display: flex; align-items: center; flex-shrink: 0; padding-left: 15px;",
                 tags$a(
                     href = theme$logo_link_url,
                     target = "_blank",
@@ -40,7 +40,7 @@ create_app_header <- function(theme) {
             # Title and Mode Selector - left-aligned
             div(
                 class = "header-center-section",
-                style = "display: flex; align-items: center; margin-left: 20px; gap: 15px;",
+                style = "display: flex; align-items: center; margin-left: 5px; gap: 15px;",
                 
                 # Application Title
                 h2("Anatomic RNA Atlas", 
@@ -187,13 +187,19 @@ create_explorer_mode_controls <- function(theme) {
     div(
         class = "explorer-mode-controls",
         tagList(
-            # Full contrast selection section
-            create_contrast_selection_ui(theme),
+            # Contrast selection section with consistent styling
+            div(
+                class = "product-grouping-section",
+                create_contrast_selection_ui(theme)
+            ),
             
-            # Full gene selection section
-            create_gene_selection_ui(theme),
+            # Gene selection section with consistent styling
+            div(
+                class = "gene-selection-container",
+                create_gene_selection_ui(theme)
+            ),
             
-            # Full analysis options section
+            # Analysis options section
             create_analysis_options_ui(theme)
         )
     )
@@ -266,7 +272,7 @@ create_target_contrast_selection_ui <- function(theme) {
 # Target mode gene selection - simplified for single/multiple gene input
 create_target_gene_selection_ui <- function(theme) {
     div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
         
         # Section header
         h5("Target Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_sm, ";")),
@@ -293,7 +299,15 @@ create_target_gene_selection_ui <- function(theme) {
 # Basic analysis options for target mode
 create_basic_analysis_options_ui <- function(theme) {
     div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
+        
+        # Section header
+        h5("Analysis Options", 
+           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Select data transformation method:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
         
         # Data type selection
         radioButtons("data_type",
@@ -310,7 +324,16 @@ create_basic_analysis_options_ui <- function(theme) {
 # Contrast selection UI component (existing - for explorer mode)
 create_contrast_selection_ui <- function(theme) {
     div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
+        
+        # Section header
+        h5("Group Comparison", 
+           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Select two groups to compare expression levels:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
+        
         selectInput("group1",
             "Group 1 (Baseline):",
             choices = NULL,
@@ -328,10 +351,14 @@ create_contrast_selection_ui <- function(theme) {
 # Gene selection UI component
 create_gene_selection_ui <- function(theme) {
     div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
         
         # Section header
-        h5("Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_sm, ";")),
+        h5("Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Choose genes to analyze across the selected comparisons:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
         
         # Gene set selection dropdown
         selectInput("gene_set_selection",
@@ -405,7 +432,15 @@ create_gene_pagination_ui <- function(theme) {
 # Analysis options UI component
 create_analysis_options_ui <- function(theme) {
     div(
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
+        
+        # Section header
+        h5("Analysis Options", 
+           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Configure analysis parameters and visualization options:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
         
         # Data type selection
         radioButtons("data_type",

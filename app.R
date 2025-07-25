@@ -24,6 +24,12 @@ suppressPackageStartupMessages({
     library(networkD3)
 })
 
+# Suppress warnings for DT column issues
+options(DT.warn.size = FALSE)
+
+# Helper operator for null-coalescing
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 # Source modular components
 source("data_utils.R")        # Data loading and processing functions
 source("theme_config.R")      # Theme configuration and CSS generation
@@ -97,21 +103,23 @@ server <- function(input, output, session) {
     cat("Server initialized with pre-loaded data\n")
 
     # Mode switching observer - handles both button clicks and radio inputs
+    observeEvent(input$mode_target, {
+        values$app_mode <- "target"
+        updateRadioButtons(session, "app_mode", selected = "target")
+    })
+    
+    observeEvent(input$mode_explorer, {
+        values$app_mode <- "explorer"
+        updateRadioButtons(session, "app_mode", selected = "explorer")
+    })
+    
+    # Handle radio button changes (for compatibility)
+    observeEvent(input$app_mode, {
+        values$app_mode <- input$app_mode
+    })
+    
+    # Re-update choices when mode changes
     observe({
-        # Handle mode button clicks
-        if (!is.null(input$mode_target)) {
-            values$app_mode <- "target"
-        }
-        if (!is.null(input$mode_explorer)) {
-            values$app_mode <- "explorer"
-        }
-        
-        # Handle radio button changes (for compatibility)
-        if (!is.null(input$app_mode)) {
-            values$app_mode <- input$app_mode
-        }
-        
-        # Re-update choices when mode changes
         if (!is.null(values$sample_data)) {
             celltype_col <- get_celltype_column(values$sample_data)
             
@@ -343,6 +351,50 @@ server <- function(input, output, session) {
             values$gene_page <- values$gene_page - 1
         }
     })
+
+    # Handle cell type toggle clicks
+    observeEvent(input$cell_type_clicked, {
+        cell_type <- input$cell_type_clicked
+        if (!is.null(cell_type) && cell_type %in% names(values$cell_type_toggles)) {
+            # Toggle the state
+            values$cell_type_toggles[[cell_type]] <- !values$cell_type_toggles[[cell_type]]
+        }
+    })
+
+    # Handle group action buttons
+    observeEvent(input$select_all_real, {
+        # Select only Real* products
+        real_types <- get_grouping_cell_types("real_products")
+        celltype_col <- get_celltype_column(values$sample_data)
+        if (!is.null(celltype_col)) {
+            available_types <- unique(values$sample_data[[celltype_col]])
+            for (cell_type in available_types) {
+                values$cell_type_toggles[[cell_type]] <- cell_type %in% real_types
+            }
+        }
+    })
+
+    observeEvent(input$select_all_types, {
+        # Select all cell types
+        celltype_col <- get_celltype_column(values$sample_data)
+        if (!is.null(celltype_col)) {
+            available_types <- unique(values$sample_data[[celltype_col]])
+            for (cell_type in available_types) {
+                values$cell_type_toggles[[cell_type]] <- TRUE
+            }
+        }
+    })
+
+    observeEvent(input$select_none, {
+        # Deselect all cell types
+        celltype_col <- get_celltype_column(values$sample_data)
+        if (!is.null(celltype_col)) {
+            available_types <- unique(values$sample_data[[celltype_col]])
+            for (cell_type in available_types) {
+                values$cell_type_toggles[[cell_type]] <- FALSE
+            }
+        }
+    })
     
     # Simple pagination info UI
     output$gene_pagination_info <- renderUI({
@@ -415,6 +467,69 @@ server <- function(input, output, session) {
             br(),
             tags$em(paste("Genes:", paste(genes, collapse = ", ")))
         )
+    })
+
+    # Render grouped cell type toggles for target mode
+    output$grouped_cell_type_toggles <- renderUI({
+        req(values$sample_data)
+        
+        # Only render for target mode
+        if (values$app_mode != "target") return(NULL)
+        
+        celltype_col <- get_celltype_column(values$sample_data)
+        if (is.null(celltype_col)) return(NULL)
+        
+        cell_types <- unique(values$sample_data[[celltype_col]])
+        
+        # Initialize toggle states if not already set using the configuration
+        if (length(values$cell_type_toggles) == 0) {
+            values$cell_type_toggles <- get_default_toggle_states()
+        }
+        
+        # Get cell types organized by group
+        grouped_types <- get_cell_types_by_group()
+        
+        # Create UI for each group
+        group_sections <- lapply(names(grouped_types), function(group_key) {
+            group_info <- grouped_types[[group_key]]
+            group_cell_types <- intersect(group_info$cell_types, cell_types)
+            
+            if (length(group_cell_types) == 0) return(NULL)
+            
+            # Create toggle buttons for this group
+            toggle_buttons <- lapply(group_cell_types, function(cell_type) {
+                is_active <- values$cell_type_toggles[[cell_type]] %||% FALSE
+                
+                button_class <- if (is_active) "cell-type-toggle-btn active" else "cell-type-toggle-btn inactive"
+                
+                div(
+                    class = "cell-type-toggle",
+                    actionButton(
+                        inputId = paste0("toggle_", gsub("[^A-Za-z0-9]", "_", cell_type)),
+                        label = cell_type,
+                        class = button_class,
+                        onclick = paste0("Shiny.setInputValue('cell_type_clicked', '", cell_type, "', {priority: 'event'});")
+                    )
+                )
+            })
+            
+            # Return group section
+            div(
+                class = "cell-type-toggle-section",
+                div(
+                    class = "cell-type-section-header",
+                    style = paste0("color: ", app_theme$text_white, "; margin-bottom: ", app_theme$spacing_sm, ";"),
+                    group_info$name
+                ),
+                div(
+                    class = "cell-type-toggle-container",
+                    toggle_buttons
+                )
+            )
+        })
+        
+        # Remove NULL sections
+        group_sections[!sapply(group_sections, is.null)]
     })
 
     # Render cell type toggles for target mode
@@ -1176,44 +1291,57 @@ server <- function(input, output, session) {
             paste0("Range Q5-Q95 (", data_type_label, ")")
         )
 
-        # Create DT with formatting
-        DT::datatable(
-            all_stats,
-            options = list(
-                pageLength = 10,
-                scrollY = "150px",
-                scrollCollapse = TRUE,
-                dom = "tip",
-                ordering = TRUE,
-                order = list(list(0, "asc"), list(1, "asc"))
-            ),
-            rownames = FALSE,
-            class = "compact stripe hover",
-            selection = "none"
-        ) %>%
-            DT::formatStyle(
-                columns = 1:ncol(all_stats),
-                fontSize = "11px"
-            ) %>%
-            DT::formatStyle(
-                "Gene",
-                fontWeight = "bold",
-                color = app_theme$primary_color
-            )
-        
-        # Only add group formatting in explorer mode
-        if (values$app_mode == "explorer" && !is.null(input$group1) && !is.null(input$group2)) {
-            dt <- dt %>%
-                DT::formatStyle(
-                    "Group",
-                    backgroundColor = DT::styleEqual(
-                        c(input$group1, input$group2),
-                        c("rgba(220, 20, 60, 0.1)", "rgba(31, 98, 165, 0.1)")
+        # Create DT with formatting and error handling
+        suppressWarnings({
+            tryCatch({
+                dt <- DT::datatable(
+                    all_stats,
+                    options = list(
+                        pageLength = 10,
+                        scrollY = "150px",
+                        scrollCollapse = TRUE,
+                        dom = "tip",
+                        ordering = TRUE,
+                        order = list(list(0, "asc"), list(1, "asc"))
+                    ),
+                    rownames = FALSE,
+                    class = "compact stripe hover",
+                    selection = "none"
+                ) %>%
+                    DT::formatStyle(
+                        columns = 1:ncol(all_stats),
+                        fontSize = "11px"
+                    ) %>%
+                    DT::formatStyle(
+                        "Gene",
+                        fontWeight = "bold",
+                        color = app_theme$primary_color
                     )
-                )
-        }
-        
-        return(dt)
+                
+                # Only add group formatting in explorer mode if Group column exists
+                if (values$app_mode == "explorer" && "Group" %in% colnames(all_stats) && 
+                    !is.null(input$group1) && !is.null(input$group2)) {
+                    dt <- dt %>%
+                        DT::formatStyle(
+                            "Group",
+                            backgroundColor = DT::styleEqual(
+                                c(input$group1, input$group2),
+                                c("rgba(220, 20, 60, 0.1)", "rgba(31, 98, 165, 0.1)")
+                            )
+                        )
+                }
+                
+                return(dt)
+            }, error = function(e) {
+                # Silently return basic table if formatting fails
+                return(DT::datatable(
+                    all_stats,
+                    options = list(pageLength = 10, dom = "tip"),
+                    rownames = FALSE,
+                    class = "compact stripe hover"
+                ))
+            })
+        })
     })
 
     # Overall statistics UI component (when no genes selected)
@@ -1502,45 +1630,57 @@ server <- function(input, output, session) {
         colnames(expression_subset) <- safe_colnames
 
         # Create DT with formatting and error handling
-        tryCatch({
-            dt <- DT::datatable(
-                expression_subset,
-                options = list(
-                    pageLength = 25,
-                    scrollX = TRUE,
-                    scrollY = "600px",
-                    scrollCollapse = TRUE,
-                    dom = "Bfrtip",
-                    buttons = c("copy", "csv", "excel"),
-                    columnDefs = list(
-                        list(className = "dt-center", targets = "_all"),
-                        list(width = "120px", targets = c(0, 1)) # Fixed width for Sample and Group columns
-                    )
-                ),
-                rownames = FALSE,
-                class = "compact stripe hover",
-                extensions = "Buttons"
-            )
-            # Only apply formatStyle if 'Group' column exists and we're in explorer mode
-            if ("Group" %in% colnames(expression_subset) && values$app_mode == "explorer" && !is.null(input$group1) && !is.null(input$group2)) {
-                dt <- dt %>% DT::formatStyle(
-                    "Group",
-                    backgroundColor = DT::styleEqual(
-                        c(input$group1, input$group2),
-                        c(
-                            paste0("rgba(", paste(col2rgb(app_theme$plot_group1), collapse = ","), ",0.1)"),
-                            paste0("rgba(", paste(col2rgb(app_theme$plot_group2), collapse = ","), ",0.1)")
+        suppressWarnings({
+            tryCatch({
+                dt <- DT::datatable(
+                    expression_subset,
+                    options = list(
+                        pageLength = 25,
+                        scrollX = TRUE,
+                        scrollY = "600px",
+                        scrollCollapse = TRUE,
+                        dom = "Bfrtip",
+                        buttons = c("copy", "csv", "excel"),
+                        columnDefs = list(
+                            list(className = "dt-center", targets = "_all"),
+                            list(width = "120px", targets = c(0, 1)) # Fixed width for Sample and Group columns
                         )
-                    )
+                    ),
+                    rownames = FALSE,
+                    class = "compact stripe hover",
+                    extensions = "Buttons"
                 )
-            }
-            dt
-        }, error = function(e) {
-            # If DataTable creation fails, return a simple data frame
-            warning(paste("DataTable creation failed:", e$message))
-            return(data.frame(
-                Message = paste("Table display error. Data available but formatting failed:", e$message)
-            ))
+                
+                # Only apply formatStyle if 'Group' column exists and we're in explorer mode
+                if ("Group" %in% colnames(expression_subset) && values$app_mode == "explorer" && 
+                    !is.null(input$group1) && !is.null(input$group2)) {
+                    # Additional safety check to ensure the groups exist in the data
+                    group_values <- unique(expression_subset$Group)
+                    if (input$group1 %in% group_values && input$group2 %in% group_values) {
+                        dt <- dt %>% DT::formatStyle(
+                            "Group",
+                            backgroundColor = DT::styleEqual(
+                                c(input$group1, input$group2),
+                                c(
+                                    paste0("rgba(", paste(col2rgb(app_theme$plot_group1), collapse = ","), ",0.1)"),
+                                    paste0("rgba(", paste(col2rgb(app_theme$plot_group2), collapse = ","), ",0.1)")
+                                )
+                            )
+                        )
+                    }
+                }
+                dt
+            }, error = function(e) {
+                # Silently log the error but don't show warning to user
+                message("DataTable creation failed: ", e$message)
+                # Return a basic table without formatting
+                return(DT::datatable(
+                    expression_subset,
+                    options = list(pageLength = 25, scrollX = TRUE, dom = "tip"),
+                    rownames = FALSE,
+                    class = "compact stripe hover"
+                ))
+            })
         })
     })
 
@@ -1809,19 +1949,21 @@ server <- function(input, output, session) {
             select(Gene = similar_gene, `Avg Corr` = avg_correlation) %>%
             mutate(`Avg Corr` = round(`Avg Corr`, 3))
         
-        DT::datatable(
-            summary_table,
-            options = list(
-                pageLength = 10,
-                dom = "t",
-                ordering = FALSE,
-                scrollY = "200px",
-                scrollCollapse = TRUE
-            ),
-            rownames = FALSE,
-            selection = "none"
-        ) %>%
-            DT::formatStyle("Gene", fontWeight = "bold")
+        suppressWarnings({
+            DT::datatable(
+                summary_table,
+                options = list(
+                    pageLength = 10,
+                    dom = "t",
+                    ordering = FALSE,
+                    scrollY = "200px",
+                    scrollCollapse = TRUE
+                ),
+                rownames = FALSE,
+                selection = "none"
+            ) %>%
+                DT::formatStyle("Gene", fontWeight = "bold")
+        })
     })
     
     # Co-expression heatmap
@@ -1871,26 +2013,28 @@ server <- function(input, output, session) {
         
         detailed_table <- create_correlation_table(results)
         
-        DT::datatable(
-            detailed_table,
-            options = list(
-                pageLength = 15,
-                scrollX = TRUE,
-                dom = "Bfrtip",
-                buttons = c("copy", "csv", "excel")
-            ),
-            rownames = FALSE,
-            extensions = "Buttons",
-            selection = "none"
-        ) %>%
-            DT::formatStyle("Gene", fontWeight = "bold") %>%
-            DT::formatStyle(
-                c("Avg Correlation", "Max Correlation", "Min Correlation"),
-                backgroundColor = DT::styleInterval(
-                    c(0.7, 0.8, 0.9), 
-                    c("white", "#e8f5e8", "#d4edda", "#c3e6cb")
+        suppressWarnings({
+            DT::datatable(
+                detailed_table,
+                options = list(
+                    pageLength = 15,
+                    scrollX = TRUE,
+                    dom = "Bfrtip",
+                    buttons = c("copy", "csv", "excel")
+                ),
+                rownames = FALSE,
+                extensions = "Buttons",
+                selection = "none"
+            ) %>%
+                DT::formatStyle("Gene", fontWeight = "bold") %>%
+                DT::formatStyle(
+                    c("Avg Correlation", "Max Correlation", "Min Correlation"),
+                    backgroundColor = DT::styleInterval(
+                        c(0.7, 0.8, 0.9), 
+                        c("white", "#e8f5e8", "#d4edda", "#c3e6cb")
+                    )
                 )
-            )
+        })
     })
 }
 
