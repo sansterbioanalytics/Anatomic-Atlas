@@ -100,22 +100,25 @@ create_mode_selector_ui <- function(theme) {
 # =============================================================================
 
 # Create main sidebar with analysis controls
-create_app_sidebar <- function(theme, width = 300) {
+create_app_sidebar <- function(theme, width = 380) {
     dashboardSidebar(
         width = width,
-        h4("Analysis Controls", style = paste0("margin: ", theme$spacing_lg, "; color: ", theme$text_white, ";")),
-        
-        # Mode-specific controls
-        conditionalPanel(
-            condition = "input.app_mode == 'target'",
-            # Target Mode Controls - Simplified interface
-            create_target_mode_controls(theme)
-        ),
-        
-        conditionalPanel(
-            condition = "input.app_mode == 'explorer'",
-            # Explorer Mode Controls - Full interface (current functionality)
-            create_explorer_mode_controls(theme)
+        div(
+            style = "height: 100%; overflow-y: auto; padding-right: 10px;",
+            h4("Analysis Controls", style = paste0("margin: ", theme$spacing_lg, "; color: ", theme$text_white, ";")),
+            
+            # Mode-specific controls
+            conditionalPanel(
+                condition = "input.app_mode == 'target'",
+                # Target Mode Controls - Simplified interface
+                create_target_mode_controls(theme)
+            ),
+            
+            conditionalPanel(
+                condition = "input.app_mode == 'explorer'",
+                # Explorer Mode Controls - Full interface (current functionality)
+                create_explorer_mode_controls(theme)
+            )
         )
     )
 }
@@ -128,7 +131,7 @@ create_target_mode_controls <- function(theme) {
             # 1. Gene selection FIRST - primary control
             div(
                 class = "gene-selection-container",
-                create_target_gene_selection_ui(theme)
+                create_gene_selection_ui(theme)  # Use unified gene selection
             ),
             
             # 2. Cell type selection with visual grouping
@@ -137,8 +140,8 @@ create_target_mode_controls <- function(theme) {
                 create_product_grouping_ui(theme)
             ),
             
-            # 3. Basic analysis options
-            create_basic_analysis_options_ui(theme)
+            # 3. Analysis options (unified with explorer mode)
+            create_analysis_options_ui(theme)
         )
     )
 }
@@ -154,9 +157,9 @@ create_explorer_mode_controls <- function(theme) {
                 create_gene_selection_ui(theme)
             ),
             
-            # Contrast selection section with consistent styling
+            # Group comparison section for explorer mode
             div(
-                class = "product-grouping-section",
+                class = "contrast-selection-container",
                 create_contrast_selection_ui(theme)
             ),
             
@@ -228,56 +231,6 @@ create_target_contrast_selection_ui <- function(theme) {
     )
 }
 
-# Target mode gene selection - simplified for single/multiple gene input
-create_target_gene_selection_ui <- function(theme) {
-    div(
-        style = paste0("margin: ", theme$spacing_sm, ";"),
-        
-        # Section header
-        h5("Target Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_sm, ";")),
-        
-        # Server-side gene input optimized for large datasets
-        selectizeInput("target_gene_input",
-            "Enter Gene Symbol(s):",
-            choices = NULL,
-            multiple = TRUE,
-            options = list(
-                placeholder = "Type to search for genes...",
-                maxItems = 25
-            )
-        ),
-        
-        helpText("Start typing to search through available genes. Multiple genes can be selected for comparison.",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, ";"))
-    )
-}
-
-# Basic analysis options for target mode
-create_basic_analysis_options_ui <- function(theme) {
-    div(
-        style = paste0("margin: ", theme$spacing_sm, ";"),
-        
-        # Section header
-        h5("Analysis Options", 
-           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
-        
-        helpText("Select data transformation method:",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
-        
-        # Data type selection
-        radioButtons("data_type",
-            "Expression Data Type:",
-            choices = list(
-                "log2(CPM + 1)" = "log2_cpm",
-                "VST (Variance Stabilizing Transform)" = "vst"
-            ),
-            selected = "log2_cpm"
-        )
-    )
-}
-
 # Contrast selection UI component (existing - for explorer mode)
 create_contrast_selection_ui <- function(theme) {
     div(
@@ -305,7 +258,7 @@ create_contrast_selection_ui <- function(theme) {
     )
 }
 
-# Gene selection UI component
+# Gene selection UI component - reorganized with proper order
 create_gene_selection_ui <- function(theme) {
     div(
         style = paste0("margin: ", theme$spacing_sm, ";"),
@@ -313,43 +266,51 @@ create_gene_selection_ui <- function(theme) {
         # Section header
         h5("Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
         
-        helpText("Choose genes to analyze across the selected comparisons:",
+        helpText("Enter gene symbols or select from predefined gene sets:",
                 class = "help-text",
                 style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
         
-        # Gene set selection dropdown
-        selectInput("gene_set_selection",
-            "Choose Gene Set:",
-            choices = NULL,
-            selected = "Custom Genes"
+        # 1. FIRST: Gene symbol input text area
+        textAreaInput(
+            "gene_textarea",
+            "Gene symbols (comma, space, or line separated):",
+            placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
+            value = "SCN11A",  # Default gene
+            rows = 6  # Increased from 4 to 6 for better usability
         ),
         
-        # File upload for custom gene sets
-        fileInput("gene_file_upload",
-            "Upload Custom Gene Set:",
-            accept = c(".csv", ".tsv", ".txt"),
-            placeholder = "No file selected"
-        ),
-        helpText("Upload CSV/TSV with gene symbols in first column. Selected genes will be used across all plots.",
-            class = "help-text"
-        ),
+        # 2. SECOND: Real-time validation output - always visible
+        uiOutput("gene_validation"),
         
-        # Interactive gene search (conditional)
-        conditionalPanel(
-            condition = "input.gene_set_selection == 'Custom Genes'",
-            selectizeInput("selected_genes",
-                "Search & Select Genes:",
-                choices = NULL,
-                multiple = TRUE,
-                options = list(
-                    placeholder = "Type to search for genes...",
-                    maxItems = 25
-                )
+        # 3. THIRD: Gene set selection dropdown
+        div(
+            style = "margin-top: 15px;",
+            selectInput("gene_set_selection",
+                "Or choose from predefined gene sets:",
+                choices = c("Custom Genes" = "Custom Genes"),
+                selected = "Custom Genes"
             ),
-            
-            helpText("Start typing to search through available genes. Multiple genes can be selected for analysis.",
-                    class = "help-text",
-                    style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, ";"))
+            helpText(
+                "Select a predefined gene set to populate the text area above.",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, ";")
+            )
+        ),
+        
+        # 4. FOURTH: File upload for large lists
+        div(
+            style = "margin-top: 15px; padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
+            fileInput(
+                "gene_file_upload",
+                "Or upload gene list (.txt, .csv):",
+                accept = c(".csv", ".tsv", ".txt"),
+                placeholder = "No file selected"
+            ),
+            helpText(
+                "Upload a file with one gene per line or column.",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, "; margin-top: 5px;")
+            )
         ),
         
         # Display selected genes information
@@ -386,39 +347,6 @@ create_gene_pagination_ui <- function(theme) {
                 textOutput("gene_pagination_info", inline = TRUE)
             )
         )
-    )
-}
-
-# Analysis options UI component
-create_analysis_options_ui <- function(theme) {
-    div(
-        style = paste0("margin: ", theme$spacing_sm, ";"),
-        
-        # Section header
-        h5("Analysis Options", 
-           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
-        
-        helpText("Configure analysis parameters and visualization options:",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
-        
-        # Data type selection
-        radioButtons("data_type",
-            "Expression Data Type:",
-            choices = list(
-                "log2(CPM + 1)" = "log2_cpm",
-                "VST (Variance Stabilizing Transform)" = "vst"
-            ),
-            selected = "log2_cpm"
-        ),
-        br(),
-        
-        # Plot options
-        checkboxInput("show_points", "Show Individual Points", value = TRUE),
-        br(),
-        
-        # Download button
-        downloadButton("download_plot", "Download Plot", class = "btn-primary btn-block")
     )
 }
 
@@ -487,6 +415,70 @@ create_gene_heatmap_tab <- function() {
     )
 }
 
+# Analysis options UI component - shared between modes (consolidated)
+create_analysis_options_ui <- function(theme) {
+    div(
+        style = paste0("margin: ", theme$spacing_sm, ";"),
+        
+        # Section header
+        h5("Analysis Options", 
+           style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        helpText("Configure analysis parameters and visualization options:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: ", theme$spacing_md, ";")),
+        
+        # Data type selection with proper choices
+        radioButtons("data_type",
+            "Expression Data Type:",
+            choices = list(
+                "log2(CPM + 1)" = "log2_cpm",
+                "VST (Variance Stabilizing Transform)" = "vst"
+            ),
+            selected = "log2_cpm"
+        ),
+        br(),
+        
+        # Plot options
+        checkboxInput("show_points", "Show Individual Points", value = TRUE),
+        br(),
+        
+        # Download button
+        downloadButton("download_plot", "Download Plot", class = "btn-primary btn-sm")
+    )
+}
+
+# Create expression plot box for explorer mode
+create_expression_plot_box <- function() {
+    box(
+        title = "Expression Distribution",
+        status = "primary",
+        solidHeader = TRUE,
+        width = 7,
+        height = "900px",
+        tabsetPanel(
+            tabPanel(
+                "Expression Distribution",
+                helpText("Boxplots showing expression distribution for selected genes", 
+                        class = "help-text"),
+                plotlyOutput("expression_histogram", height = "800px") %>% withSpinner()
+            ),
+            tabPanel(
+                "Gene Set Heatmap", 
+                helpText("Heatmap of mean expression across groups", 
+                        class = "help-text"),
+                plotlyOutput("gene_set_heatmap", height = "800px") %>% withSpinner()
+            ),
+            tabPanel(
+                "Co-Expression Analysis",
+                create_coexpression_controls(),
+                br(),
+                create_coexpression_results()
+            )
+        )
+    )
+}
+
 # Co-expression analysis tab
 create_coexpression_tab <- function() {
     tabPanel(
@@ -528,12 +520,14 @@ create_coexpression_controls <- function() {
             step = 0.1
         ),
         numericInput("n_similar_genes",
-            "Number of Similar Genes:",
+            "Similar Genes Per Query Gene:",
             value = 25,
             min = 1,
             max = 250,
             step = 1
         ),
+        helpText("Finds the top N most correlated genes for each query gene, then combines and deduplicates results.",
+               class = "help-text"),
         numericInput("max_genes_batch",
             "Batch Size:",
             value = 250,
@@ -616,12 +610,7 @@ create_analysis_overview_box <- function() {
             style = "max-height: 480px; overflow-y: auto; padding-right: 8px;",
             uiOutput("sample_counts_ui"),
             conditionalPanel(
-                condition = "input.selected_genes && input.selected_genes.length > 0",
-                h5("Gene Statistics:", class = "statistics-header", style = "margin-top: 12px;"),
-                DT::dataTableOutput("gene_stats_table", height = "200px")
-            ),
-            conditionalPanel(
-                condition = "!input.selected_genes || input.selected_genes.length == 0",
+                condition = "!output.current_genes_available",
                 uiOutput("overall_stats_ui")
             )
         )
@@ -716,20 +705,45 @@ create_analysis_overview_box_left <- function() {
         solidHeader = TRUE,
         width = 6,  # Changed from width = 5 to 6 for better balance
         height = "900px",
-        plotlyOutput("group_expression_barplot", height = "320px"),
-        h4(textOutput("contrast_title")),
-        br(),
+        # Expression distribution plot at the top
+        conditionalPanel(
+            condition = "output.current_genes_available",
+            h5("Expression Distribution", style = "margin-bottom: 8px;"),
+            # Navigation controls for gene pagination
+            conditionalPanel(
+                condition = "output.show_gene_pagination",
+                div(
+                    style = "margin-bottom: 8px; padding: 4px 8px; background-color: #f8f9fa; border-radius: 4px; text-align: center;",
+                    fluidRow(
+                        column(4,
+                            actionButton("prev_genes", "← Previous 10", 
+                                       class = "btn-xs btn-default", 
+                                       style = "width: 100%; font-size: 11px; padding: 2px 4px;")
+                        ),
+                        column(4,
+                            div(
+                                style = "padding-top: 3px; font-size: 11px; color: #666;",
+                                uiOutput("gene_pagination_info")
+                            )
+                        ),
+                        column(4,
+                            actionButton("next_genes", "Next 10 →", 
+                                       class = "btn-xs btn-default",
+                                       style = "width: 100%; font-size: 11px; padding: 2px 4px;")
+                        )
+                    )
+                )
+            ),
+            plotlyOutput("expression_histogram", height = "480px") %>% withSpinner(),
+            br()
+        ),
+        h4(textOutput("contrast_title"), style = "margin-bottom: 8px;"),
         div(
             class = "analysis-stats-container",
-            style = "max-height: 480px; overflow-y: auto; padding-right: 8px;",
+            style = "max-height: 300px; overflow-y: auto; padding-right: 8px;",
             uiOutput("sample_counts_ui"),
             conditionalPanel(
-                condition = "input.target_gene_input && input.target_gene_input.length > 0 || input.selected_genes && input.selected_genes.length > 0",
-                h5("Gene Statistics:", class = "statistics-header", style = "margin-top: 12px;"),
-                DT::dataTableOutput("gene_stats_table", height = "200px")
-            ),
-            conditionalPanel(
-                condition = "(!input.target_gene_input || input.target_gene_input.length == 0) && (!input.selected_genes || input.selected_genes.length == 0)",
+                condition = "!output.current_genes_available",
                 uiOutput("overall_stats_ui")
             )
         )

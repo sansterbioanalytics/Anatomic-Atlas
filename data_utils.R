@@ -70,9 +70,8 @@ load_gene_sets <- function() {
     for (file in gene_set_files) {
         file_path <- file.path(gene_set_path, file)
         if (file.exists(file_path)) {
-            name <- gsub("\\.csv$", "", file)
-            name <- gsub("_", " ", name) # Replace underscores with spaces
-            gene_sets[[name]] <- readr::read_csv(file_path, show_col_types = FALSE)$Symbol
+            # Use the original filename (with .csv) as the key to match server expectations
+            gene_sets[[file]] <- readr::read_csv(file_path, show_col_types = FALSE)$Symbol
         }
     }
 

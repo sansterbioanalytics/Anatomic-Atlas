@@ -97,10 +97,61 @@ server <- function(input, output, session) {
         data_loaded = TRUE,  # Already loaded!
         gene_page = 1,  # Current page for gene pagination (always 10 genes per page)
         app_mode = "target",  # Track current application mode
-        cell_type_toggles = list()  # Track cell type toggle states for target mode
+        cell_type_toggles = list(),  # Track cell type toggle states for target mode
+        validated_genes = c("SCN11A"),  # Initialize with default gene
+        available_genes = NULL  # Will be populated when expression data is processed
     )
 
     cat("Server initialized with pre-loaded data\n")
+    cat("Gene sets available:", length(gene_sets), "\n")
+    if (length(gene_sets) > 0) {
+        cat("Gene set names:", names(gene_sets), "\n")
+    }
+
+    # Load gene set dropdown choices once on startup
+    if (length(gene_sets) > 0) {
+        cat("Loading gene set dropdown on startup\n")
+        
+        # Create proper display names from CSV filenames
+        gene_set_display_names <- sapply(names(gene_sets), function(name) {
+            # Remove .csv extension and replace underscores with spaces
+            display_name <- gsub("\\.csv$", "", name)
+            display_name <- gsub("_", " ", display_name)
+            # Capitalize first letter of each word
+            display_name <- tools::toTitleCase(display_name)
+            return(display_name)
+        })
+        
+        # Create choices list with display names as labels and original names as values
+        gene_set_choices <- c("Custom Genes" = "Custom Genes")
+        for (i in seq_along(gene_sets)) {
+            original_name <- names(gene_sets)[i]
+            display_name <- gene_set_display_names[i]
+            gene_set_choices[display_name] <- original_name
+        }
+        
+        updateSelectInput(session, "gene_set_selection",
+            choices = gene_set_choices,
+            selected = "Custom Genes"
+        )
+        
+        cat("Gene set dropdown loaded with", length(gene_sets), "predefined sets\n")
+    }
+
+    # Initialize validated genes on startup to ensure plots work immediately
+    observe({
+        if (!is.null(values$available_genes) && is.null(values$validated_genes)) {
+            # Parse the default gene from textarea
+            default_genes <- parse_gene_input("SCN11A")
+            if (!is.null(default_genes) && length(default_genes) > 0) {
+                valid_genes <- intersect(default_genes, values$available_genes)
+                if (length(valid_genes) > 0) {
+                    values$validated_genes <- valid_genes
+                    cat("Initialized validated genes with:", paste(valid_genes, collapse = ", "), "\n")
+                }
+            }
+        }
+    })
 
     # Mode switching observer - handles both button clicks and radio inputs
     observeEvent(input$mode_target, {
@@ -219,76 +270,224 @@ server <- function(input, output, session) {
         return(NULL)
     })
 
-    # Update choices when data is loaded
+    # Update choices when data is loaded - ensure this runs for both modes
     observe({
-        if (!is.null(values$sample_data)) {
-            # Use helper function to determine the cell type column name
-            celltype_col <- get_celltype_column(values$sample_data)
+        req(values$sample_data)  # Ensure sample data is available
+        
+        # Use helper function to determine the cell type column name
+        celltype_col <- get_celltype_column(values$sample_data)
+        cat("Cell type column found:", celltype_col, "\n")
 
-            if (!is.null(celltype_col)) {
-                cell_types <- unique(values$sample_data[[celltype_col]])
-                
-                # Handle different modes
-                if (values$app_mode == "target") {
-                    # Target mode: create toggle-based UI instead of dropdowns
-                    # Initialize toggle states will be handled by renderUI
-                } else {
-                    # Explorer mode: all cell types available for both groups
-                    updateSelectInput(session, "group1",
-                        choices = cell_types,
-                        selected = cell_types[1]
-                    )
+        if (!is.null(celltype_col)) {
+            cell_types <- unique(values$sample_data[[celltype_col]])
+            cat("Cell types available:", length(cell_types), "types:", paste(head(cell_types, 5), collapse = ", "), "\n")
+            
+            # Always update Explorer mode choices regardless of current mode
+            updateSelectInput(session, "group1",
+                choices = cell_types,
+                selected = cell_types[1]
+            )
 
-                    updateSelectInput(session, "group2",
-                        choices = cell_types,
-                        selected = if (length(cell_types) > 1) cell_types[2] else cell_types[1]
-                    )
+            updateSelectInput(session, "group2",
+                choices = cell_types,
+                selected = if (length(cell_types) > 1) cell_types[2] else cell_types[1]
+            )
+            
+            cat("Updated group choices for Explorer mode\n")
+            
+            # Handle target mode toggle initialization
+            if (values$app_mode == "target" && length(values$cell_type_toggles) == 0) {
+                # Set default toggle states: Real* = TRUE, others = FALSE
+                toggle_states <- list()
+                for (cell_type in cell_types) {
+                    toggle_states[[cell_type]] <- grepl("^Real", cell_type, ignore.case = TRUE)
                 }
+                values$cell_type_toggles <- toggle_states
+                cat("Initialized cell type toggles for Target mode\n")
             }
         }
 
-        # Update gene choices - server-side selectize for large datasets (90k+ genes)
+        # Update gene choices and initialize validation
         if (!is.null(values$expression_data)) {
             genes <- sort(unique(values$expression_data$gene))  # Sort genes alphabetically
             cat("Found", length(genes), "genes in dataset\n")
-            # Set default to "SCN11A" if present, otherwise NULL
-            default_gene <- if ("SCN11A" %in% genes) "SCN11A" else NULL
-            cat("Default gene set to:", default_gene, "\n")
             
-            # Server-side selectize - properly configured for large datasets
-            updateSelectizeInput(session, "selected_genes",
-                choices = genes,
-                selected = default_gene,
-                server = TRUE,  # Essential for large datasets
-                options = list(
-                    placeholder = "Type to search for genes...",
-                    maxOptions = 100,  # Limit results shown
-                    searchConjunction = "and"  # Better search matching
-                )
-            )
+            # Store genes list for validation
+            values$available_genes <- genes
             
-            updateSelectizeInput(session, "target_gene_input",
-                choices = genes,
-                selected = default_gene,
-                server = TRUE,  # Essential for large datasets
-                options = list(
-                    placeholder = "Type to search for genes...",
-                    maxOptions = 100,  # Limit results shown
-                    searchConjunction = "and"  # Better search matching
-                )
-            )
-            cat("Gene choices updated for both inputs (server-side)\n")
+            # Initialize validated genes with default gene if it exists
+            if ("SCN11A" %in% genes) {
+                values$validated_genes <- "SCN11A"
+                cat("Initialized validated genes with SCN11A\n")
+            }
+            
+            cat("Gene choices updated and validation initialized\n")
         } else {
             cat("Expression data is NULL - gene choices not updated\n")
         }
+    })
 
-        # Update gene set choices
-        if (length(gene_sets) > 0) {
-            gene_set_choices <- c("Custom Genes" = "Custom Genes", names(gene_sets))
-            updateSelectInput(session, "gene_set_selection",
-                choices = gene_set_choices,
-                selected = "Custom Genes"
-            )
+    # Parse and validate gene input from text area
+    parse_gene_input <- function(text_input) {
+        if (is.null(text_input) || text_input == "") return(NULL)
+        
+        # Split by common separators: comma, semicolon, newline, tab, space
+        genes <- unique(trimws(unlist(strsplit(text_input, "[,;\\n\\t\\s]+"))))
+        genes[genes != ""]  # Remove empty strings
+    }
+
+    # Suggest similar genes for typos
+    suggest_genes <- function(invalid_genes, available_genes, max_suggestions = 10) {
+        if (length(invalid_genes) == 0 || length(available_genes) == 0) return(NULL)
+        
+        all_suggestions <- c()
+        for (gene in invalid_genes) {
+            # Simple fuzzy matching - find genes that start with same letters
+            partial_matches <- available_genes[grepl(paste0("^", substr(gene, 1, min(3, nchar(gene)))), 
+                                                   available_genes, ignore.case = TRUE)]
+            if (length(partial_matches) > 0) {
+                # Add up to 3 suggestions per invalid gene, formatted as "invalid -> suggestion1, suggestion2"
+                suggestions_for_gene <- head(partial_matches, 3)
+                all_suggestions <- c(all_suggestions, paste0(gene, " → ", paste(suggestions_for_gene, collapse = ", ")))
+            }
+        }
+        # Return up to max_suggestions total
+        head(all_suggestions, max_suggestions)
+    }
+
+    # Unified gene validation output for both modes, with proper error handling
+    output$gene_validation <- renderUI({       
+        # Ensure we have the required reactive inputs - add safe defaults
+        gene_source <- input$gene_set_selection %||% "Custom Genes"
+        genes_entered <- NULL
+        validation_label <- NULL
+        
+        if (gene_source == "Custom Genes") {
+            genes_entered <- parse_gene_input(input$gene_textarea)
+            validation_label <- "Custom gene input"
+        } else if (gene_source == "Uploaded Gene Set") {
+            genes_entered <- values$uploaded_genes
+            validation_label <- "Uploaded gene set"
+        } else if (!is.null(gene_sets) && gene_source %in% names(gene_sets)) {
+            genes_entered <- gene_sets[[gene_source]]
+            validation_label <- paste("Predefined gene set:", gene_source)
+        }
+        
+        cat("Genes entered length:", length(genes_entered), "\n")
+        
+        # Show loading message if available genes not ready
+        if (is.null(values$available_genes) || length(values$available_genes) == 0) {
+            return(div(
+                style = "color: #007bff; padding: 12px; font-size: 14px; width: 100%; background-color: rgba(0,123,255,0.1); border-radius: 4px; border: 1px solid rgba(0,123,255,0.2);",
+                tags$i(class = "fa fa-spinner fa-spin", style = "margin-right: 5px;"),
+                "Loading gene list for validation..."
+            ))
+        }
+        
+        # Show placeholder if no genes entered
+        if (is.null(genes_entered) || length(genes_entered) == 0) {
+            return(div(
+                style = "color: #6c757d; font-style: italic; padding: 12px; font-size: 14px; width: 100%; background-color: rgba(108,117,125,0.1); border-radius: 4px; border: 1px solid rgba(108,117,125,0.2);",
+                "Enter or select gene symbols to see validation results..."
+            ))
+        }
+        
+        # Perform validation
+        valid_genes <- intersect(genes_entered, values$available_genes)
+        invalid_genes <- setdiff(genes_entered, values$available_genes)
+        
+        # Store valid genes for downstream use (only for custom input)
+        if (gene_source == "Custom Genes") {
+            if (length(valid_genes) > 0) {
+                values$validated_genes <- valid_genes
+            } else {
+                values$validated_genes <- NULL
+            }
+        }
+        
+        # Create styled validation summary (responsive panel)
+        validation_div <- div(
+            style = "background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; font-size: 14px; margin: 8px 0; color: #495057; width: 100%; box-sizing: border-box;",
+            
+            # Source label
+            div(
+                style = "margin-bottom: 8px; font-weight: bold; color: #495057; font-size: 15px;",
+                paste("Validation Source:", validation_label)
+            ),
+            
+            # Summary stats with color coding
+            div(
+                style = "margin-bottom: 8px;",
+                span(style = "font-weight: bold; color: #495057;", "Summary: "),
+                span(style = "color: #495057;", paste(length(genes_entered), "entered")),
+                span(style = "margin: 0 5px; color: #6c757d;", "•"),
+                span(style = "color: #28a745; font-weight: bold;", paste(length(valid_genes), "valid")),
+                if (length(invalid_genes) > 0) {
+                    tagList(
+                        span(style = "margin: 0 5px; color: #6c757d;", "•"),
+                        span(style = "color: #dc3545; font-weight: bold;", paste(length(invalid_genes), "invalid"))
+                    )
+                }
+            ),
+            
+            # Invalid genes section (if any)
+            if (length(invalid_genes) > 0) {
+                div(
+                    style = "border-top: 1px solid #dee2e6; padding-top: 8px; margin-top: 8px;",
+                    div(
+                        style = "color: #dc3545; font-weight: bold; margin-bottom: 4px;",
+                        "Invalid genes:"
+                    ),
+                    div(
+                        style = "color: #6c757d; margin-left: 10px; word-wrap: break-word;",
+                        paste(head(invalid_genes, 8), collapse = ", "),
+                        if (length(invalid_genes) > 8) {
+                            span(style = "font-style: italic;", paste(" ... and", length(invalid_genes) - 8, "more"))
+                        }
+                    ),
+                    
+                    # Suggestions section
+                    {
+                        suggestions <- suggest_genes(head(invalid_genes, 5), values$available_genes, 10)
+                        if (length(suggestions) > 0) {
+                            div(
+                                style = "margin-top: 6px;",
+                                div(
+                                    style = "color: #17a2b8; font-weight: bold; margin-bottom: 4px;",
+                                    paste0("Suggestions (", length(suggestions), "):")
+                                ),
+                                div(
+                                    style = "color: #495057; margin-left: 10px; font-style: italic; line-height: 1.3;",
+                                    lapply(suggestions, function(s) {
+                                        div(style = "margin-bottom: 2px; word-wrap: break-word;", s)
+                                    })
+                                )
+                            )
+                        }
+                    }
+                )
+            }
+        )
+        
+        return(validation_div)
+    })
+
+    # Explicit observer to handle gene textarea changes and update validated genes
+    observe({
+        req(input$gene_textarea)
+        req(values$available_genes)
+        
+        # Only process if we're using custom genes
+        if (input$gene_set_selection == "Custom Genes") {
+            genes_entered <- parse_gene_input(input$gene_textarea)
+            
+            if (!is.null(genes_entered) && length(genes_entered) > 0) {
+                # Validate genes against available genes
+                valid_genes <- intersect(genes_entered, values$available_genes)
+                values$validated_genes <- if (length(valid_genes) > 0) valid_genes else NULL
+            } else {
+                values$validated_genes <- NULL
+            }
         }
     })
 
@@ -303,19 +502,19 @@ server <- function(input, output, session) {
 
     # Reactive expression for currently selected genes (unified across all plots)
     current_genes <- reactive({
-        # Handle different modes
-        if (values$app_mode == "target") {
-            # Target mode uses simple gene input
-            return(input$target_gene_input)
+        # Unified gene selection logic for both modes
+        if (input$gene_set_selection == "Custom Genes") {
+            # Use validated genes from text area (both modes)
+            return(values$validated_genes)
+        } else if (input$gene_set_selection == "Uploaded Gene Set") {
+            # Use uploaded genes (both modes)
+            return(values$uploaded_genes)
         } else {
-            # Explorer mode uses existing gene set logic
-            if (input$gene_set_selection == "Custom Genes") {
-                return(input$selected_genes)
-            } else if (input$gene_set_selection == "Uploaded Gene Set") {
-                return(values$uploaded_genes)
-            } else {
-                # Using a predefined gene set
+            # Using a predefined gene set (both modes)
+            if (!is.null(gene_sets) && input$gene_set_selection %in% names(gene_sets)) {
                 return(gene_sets[[input$gene_set_selection]])
+            } else {
+                return(NULL)
             }
         }
     })
@@ -467,7 +666,7 @@ server <- function(input, output, session) {
 
     # Display target genes information (for target mode)
     output$target_genes_display <- renderUI({
-        genes <- input$target_gene_input
+        genes <- values$validated_genes
         
         if (is.null(genes) || length(genes) == 0) {
             return(div(
@@ -480,9 +679,17 @@ server <- function(input, output, session) {
             style = paste0("color: ", app_theme$text_white, "; font-size: ", app_theme$font_size_small, "; margin-bottom: ", app_theme$spacing_sm, ";"),
             tags$strong(paste(length(genes), "target genes selected")),
             br(),
-            tags$em(paste("Genes:", paste(genes, collapse = ", ")))
+            tags$em(paste("Genes:", paste(head(genes, 10), collapse = ", "), 
+                         if(length(genes) > 10) "..." else ""))
         )
     })
+    
+    # Output for checking if genes are available (used in conditional panels)
+    output$current_genes_available <- reactive({
+        genes <- current_genes()
+        return(!is.null(genes) && length(genes) > 0)
+    })
+    outputOptions(output, "current_genes_available", suspendWhenHidden = FALSE)
 
     # Render grouped cell type toggles for target mode
     output$grouped_cell_type_toggles <- renderUI({
@@ -616,6 +823,24 @@ server <- function(input, output, session) {
         )
     })
 
+    # Handle gene set selection changes - update text area when predefined sets are selected
+    observeEvent(input$gene_set_selection, {
+        if (!is.null(input$gene_set_selection)) {
+            if (input$gene_set_selection == "Custom Genes") {
+                # Reset to default gene
+                updateTextAreaInput(session, "gene_textarea", value = "SCN11A")
+            } else if (input$gene_set_selection == "Uploaded Gene Set") {
+                # Use uploaded genes if available
+                if (!is.null(values$uploaded_genes)) {
+                    updateTextAreaInput(session, "gene_textarea", value = paste(values$uploaded_genes, collapse = "\n"))
+                }
+            } else if (input$gene_set_selection %in% names(gene_sets)) {
+                selected_genes <- gene_sets[[input$gene_set_selection]]
+                updateTextAreaInput(session, "gene_textarea", value = paste(selected_genes, collapse = "\n"))
+            }
+        }
+    })
+
     # Handle cell type toggle clicks
     observeEvent(input$cell_type_toggle, {
         if (!is.null(input$cell_type_toggle$cell_type)) {
@@ -630,62 +855,37 @@ server <- function(input, output, session) {
         }
     })
 
-    # Handle file upload for custom gene sets
+    # Handle file upload for gene lists (unified for both modes)
     observeEvent(input$gene_file_upload, {
         req(input$gene_file_upload)
-
+        
         file_path <- input$gene_file_upload$datapath
         file_ext <- tools::file_ext(input$gene_file_upload$name)
-
-        tryCatch(
-            {
-                # Read the file based on extension
-                if (file_ext %in% c("csv")) {
-                    uploaded_data <- readr::read_csv(file_path, show_col_types = FALSE)
-                } else if (file_ext %in% c("tsv", "txt")) {
-                    uploaded_data <- readr::read_tsv(file_path, show_col_types = FALSE)
-                } else {
-                    # Try to read as generic delimited file
-                    uploaded_data <- readr::read_delim(file_path, show_col_types = FALSE)
-                }
-
-                # Extract gene names - assume first column contains gene symbols
-                if (ncol(uploaded_data) >= 1) {
-                    gene_names <- uploaded_data[[1]]
-                    # Remove any NA values and convert to character
-                    gene_names <- as.character(gene_names[!is.na(gene_names)])
-                    # Remove empty strings
-                    gene_names <- gene_names[gene_names != ""]
-
-                    if (length(gene_names) > 0) {
-                        values$uploaded_genes <- gene_names
-
-                        # Update gene set choices to include uploaded set
-                        current_choices <- c("Custom Genes" = "Custom Genes", names(gene_sets))
-                        if (!is.null(values$uploaded_genes)) {
-                            current_choices <- c(current_choices, "Uploaded Gene Set" = "Uploaded Gene Set")
-                        }
-
-                        updateSelectInput(session, "gene_set_selection",
-                            choices = current_choices,
-                            selected = "Uploaded Gene Set"
-                        )
-
-                        showNotification(
-                            paste("Successfully loaded", length(gene_names), "genes from uploaded file"),
-                            type = "success"
-                        )
-                    } else {
-                        showNotification("No valid gene names found in uploaded file", type = "error")
-                    }
-                } else {
-                    showNotification("File appears to be empty or invalid", type = "error")
-                }
-            },
-            error = function(e) {
-                showNotification(paste("Error reading file:", e$message), type = "error")
+        
+        result <- validate_uploaded_gene_file(file_path, file_ext)
+        
+        if (result$success) {
+            # Update text area with uploaded genes (for both modes)
+            updateTextAreaInput(session, "gene_textarea", 
+                               value = paste(result$genes, collapse = "\n"))
+            # Also store in values for backward compatibility with existing logic
+            values$uploaded_genes <- result$genes
+            
+            # Update gene set choices to include uploaded set
+            current_choices <- c("Custom Genes" = "Custom Genes", names(gene_sets))
+            if (!is.null(values$uploaded_genes)) {
+                current_choices <- c(current_choices, "Uploaded Gene Set" = "Uploaded Gene Set")
             }
-        )
+
+            updateSelectInput(session, "gene_set_selection",
+                choices = current_choices,
+                selected = "Uploaded Gene Set"
+            )
+            
+            showNotification(result$message, type = "success")
+        } else {
+            showNotification(result$message, type = "error")
+        }
     })
 
     # Expression boxplot for selected genes, split into three groups
@@ -765,6 +965,37 @@ server <- function(input, output, session) {
         # Create boxplot, faceted by gene
         plot_theme <- get_plot_theme(app_theme)
 
+        # Different handling for target mode vs explorer mode
+        if (values$app_mode == "target") {
+            # Target mode: use all available cell types in violin_group
+            # Get unique cell types for color mapping
+            unique_groups <- unique(plot_data$violin_group)
+            n_groups <- length(unique_groups)
+            
+            # Use a larger color palette for target mode since we can have many cell types
+            colors_extended <- c(
+                plot_theme$colors,
+                RColorBrewer::brewer.pal(min(8, max(3, n_groups)), "Set2"),
+                RColorBrewer::brewer.pal(min(8, max(3, n_groups)), "Set3")
+            )
+            
+            # Create color mapping for all groups
+            group_colors <- setNames(
+                colors_extended[1:n_groups],
+                unique_groups
+            )
+            
+            plot_title <- "Expression Distribution in Target Mode"
+        } else {
+            # Explorer mode: use the traditional group1/group2/Other mapping
+            group_colors <- setNames(
+                plot_theme$colors,
+                c(input$group1, input$group2, "Other")
+            )
+            
+            plot_title <- "Expression Distribution of Selected Genes"
+        }
+
         p <- ggplot(plot_data, aes(x = violin_group, y = expression, fill = violin_group, text = sample)) +
             geom_boxplot(alpha = 0.7, outlier.shape = NA) +
             {
@@ -777,14 +1008,11 @@ server <- function(input, output, session) {
             } +
             scale_fill_manual(
                 name = "Sample Group",
-                values = setNames(
-                    plot_theme$colors,
-                    c(input$group1, input$group2, "Other")
-                )
+                values = group_colors
             ) +
-            facet_wrap(~gene, scales = "free_y", nrow = 2) +
+            facet_wrap(~gene, scales = "free_y", nrow = 1) +  # Changed to nrow = 1
             labs(
-                title = "Expression Distribution of Selected Genes",
+                title = plot_title,
                 subtitle = subtitle_text,
                 x = NULL,
                 y = y_label
@@ -1209,154 +1437,6 @@ server <- function(input, output, session) {
                 )
             )
         )
-    })
-
-    # Gene statistics datatable
-    output$gene_stats_table <- DT::renderDataTable({
-        # Use unified gene selection
-        selected_genes <- current_genes()
-        
-        if (is.null(selected_genes) || length(selected_genes) == 0) {
-            return(data.frame(Message = "No genes selected"))
-        }
-
-        # Get pre-filtered contrast data
-        contrast_expression <- contrast_data()
-
-        if (is.null(contrast_expression)) {
-            return(data.frame(Message = "Unable to load data for selected groups"))
-        }
-
-        # Filter for selected genes
-        contrast_expression <- contrast_expression %>%
-            filter(gene %in% selected_genes)
-
-        if (nrow(contrast_expression) == 0) {
-            return(data.frame(Message = "No expression data available for selected genes"))
-        }
-
-        data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM+1)" else "VST"
-
-        # Calculate statistics for each gene
-        gene_stats_list <- list()
-
-        for (gene in selected_genes) {
-            # Get expression data for this specific gene
-            gene_expr <- contrast_expression %>%
-                filter(gene == !!gene)
-
-            if (nrow(gene_expr) == 0) {
-                gene_stats_list[[gene]] <- data.frame(
-                    Gene = gene,
-                    Group = c(input$group1, input$group2),
-                    Samples = c(0, 0),
-                    Mean = c(NA, NA),
-                    Median = c(NA, NA),
-                    Q25 = c(NA, NA),
-                    Q75 = c(NA, NA),
-                    Range_Q5_Q95 = c("No data", "No data")
-                )
-                next
-            }
-
-            # Calculate statistics by group
-            group_stats <- gene_expr %>%
-                group_by(celltype) %>%
-                summarise(
-                    n = n(),
-                    mean_expr = mean(expression, na.rm = TRUE),
-                    median_expr = median(expression, na.rm = TRUE),
-                    q25 = quantile(expression, 0.25, na.rm = TRUE),
-                    q75 = quantile(expression, 0.75, na.rm = TRUE),
-                    .groups = "drop"
-                )
-
-            # Overall statistics for this gene
-            all_expr <- gene_expr$expression
-            overall_quantiles <- quantile(all_expr, probs = c(0.05, 0.95), na.rm = TRUE)
-            range_text <- paste(round(overall_quantiles[1], 3), "-", round(overall_quantiles[2], 3))
-
-            # Create a row for each group
-            gene_data <- data.frame(
-                Gene = gene,
-                Group = group_stats$celltype,
-                Samples = group_stats$n,
-                Mean = round(group_stats$mean_expr, 3),
-                Median = round(group_stats$median_expr, 3),
-                Q25 = round(group_stats$q25, 3),
-                Q75 = round(group_stats$q75, 3),
-                Range_Q5_Q95 = range_text
-            )
-
-            gene_stats_list[[gene]] <- gene_data
-        }
-
-        # Combine all gene statistics
-        all_stats <- do.call(rbind, gene_stats_list)
-
-        # Create column names with data type
-        colnames(all_stats) <- c(
-            "Gene",
-            "Group",
-            "Samples",
-            paste0("Mean (", data_type_label, ")"),
-            paste0("Median (", data_type_label, ")"),
-            paste0("Q25 (", data_type_label, ")"),
-            paste0("Q75 (", data_type_label, ")"),
-            paste0("Range Q5-Q95 (", data_type_label, ")")
-        )
-
-        # Create DT with formatting and error handling
-        suppressWarnings({
-            tryCatch({
-                dt <- DT::datatable(
-                    all_stats,
-                    options = list(
-                        pageLength = 10,
-                        scrollY = "150px",
-                        scrollCollapse = TRUE,
-                        dom = "tip",
-                        ordering = TRUE,
-                        order = list(list(0, "asc"), list(1, "asc"))
-                    ),
-                    rownames = FALSE,
-                    class = "compact stripe hover",
-                    selection = "none"
-                ) %>%
-                    DT::formatStyle(
-                        columns = 1:ncol(all_stats),
-                        fontSize = "11px"
-                    ) %>%
-                    DT::formatStyle(
-                        "Gene",
-                        fontWeight = "bold",
-                        color = app_theme$primary_color
-                    )
-                
-                # Only add group formatting in explorer mode if Group column exists
-                if (values$app_mode == "explorer" && "Group" %in% colnames(all_stats) && 
-                    !is.null(input$group1) && !is.null(input$group2)) {
-                    dt <- dt %>%
-                        DT::formatStyle(
-                            "Group",
-                            backgroundColor = DT::styleEqual(
-                                c(input$group1, input$group2),
-                                c("rgba(220, 20, 60, 0.1)", "rgba(31, 98, 165, 0.1)")
-                            )
-                        )
-                }
-                
-                return(dt)
-            }, error = function(e) {
-                # Silently return basic table if formatting fails
-                return(DT::datatable(
-                    all_stats,
-                    options = list(pageLength = 10, dom = "tip"),
-                    rownames = FALSE,
-                    class = "compact stripe hover"
-                ))
-            })
-        })
     })
 
     # Overall statistics UI component (when no genes selected)
@@ -1873,12 +1953,8 @@ server <- function(input, output, session) {
     output$portfolio_ranking_plot <- renderPlotly({
         req(values$expression_data, values$sample_data, input$data_type)
         
-        # Use unified gene selection (target mode uses target_gene_input)
-        selected_genes <- if (values$app_mode == "target") {
-            input$target_gene_input
-        } else {
-            current_genes()
-        }
+        # Use unified gene selection
+        selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
             return(create_empty_plot("Select genes to display portfolio ranking", 
@@ -1914,12 +1990,8 @@ server <- function(input, output, session) {
     output$portfolio_summary_table <- DT::renderDataTable({
         req(values$expression_data, values$sample_data, input$data_type)
         
-        # Use unified gene selection (target mode uses target_gene_input)
-        selected_genes <- if (values$app_mode == "target") {
-            input$target_gene_input
-        } else {
-            current_genes()
-        }
+        # Use unified gene selection
+        selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
             return(data.frame(Message = "Select genes to display portfolio summary"))
@@ -2007,12 +2079,8 @@ server <- function(input, output, session) {
     output$target_gene_heatmap <- renderPlotly({
         req(values$expression_data, values$sample_data, input$data_type)
         
-        # Use unified gene selection (target mode uses target_gene_input)
-        selected_genes <- if (values$app_mode == "target") {
-            input$target_gene_input
-        } else {
-            current_genes()
-        }
+        # Use unified gene selection
+        selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
             return(create_empty_plot("Select genes to display target heatmap", 

@@ -120,10 +120,24 @@ find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 25,
         ))
     }
     
-    # Combine results and rank by average correlation across query genes
-    all_similar <- do.call(rbind, similar_genes_list)
+    # Get top n_similar genes per query gene, then combine and deduplicate
+    all_similar_list <- list()
     
-    # Calculate average correlation for each similar gene across all query genes
+    for (query_gene in names(similar_genes_list)) {
+        query_results <- similar_genes_list[[query_gene]]
+        if (nrow(query_results) > 0) {
+            # Take top n_similar for this query gene
+            top_for_query <- query_results %>%
+                arrange(desc(abs(correlation))) %>%
+                head(n_similar)
+            all_similar_list[[query_gene]] <- top_for_query
+        }
+    }
+    
+    # Combine all results
+    all_similar <- do.call(rbind, all_similar_list)
+    
+    # Deduplicate and rank by best correlation across all query genes
     gene_summary <- all_similar %>%
         group_by(similar_gene) %>%
         summarise(
@@ -135,15 +149,14 @@ find_coexpressed_genes <- function(expression_data, query_genes, n_similar = 25,
             query_genes = paste(query_gene, collapse = ", "),
             .groups = "drop"
         ) %>%
-        arrange(desc(avg_correlation)) %>%
-        head(n_similar)
+        arrange(desc(max_correlation))  # Rank by best correlation, not average
     
     return(list(
         similar_genes = gene_summary,
         query_genes_used = available_query_genes,
         correlation_matrix = gene_cor_matrix,
         detailed_correlations = all_similar,
-        message = paste("Found", nrow(gene_summary), "co-expressed genes")
+        message = paste("Found", nrow(gene_summary), "unique co-expressed genes (", n_similar, "per query gene, deduplicated)")
     ))
 }
 
@@ -366,10 +379,24 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
         ))
     }
     
-    # Combine results and rank by average correlation across query genes
-    all_similar <- do.call(rbind, similar_genes_list)
+    # Get top n_similar genes per query gene, then combine and deduplicate
+    all_similar_list <- list()
     
-    # Calculate average correlation for each similar gene across all query genes
+    for (query_gene in names(similar_genes_list)) {
+        query_results <- similar_genes_list[[query_gene]]
+        if (nrow(query_results) > 0) {
+            # Take top n_similar for this query gene
+            top_for_query <- query_results %>%
+                arrange(desc(abs(correlation))) %>%
+                head(n_similar)
+            all_similar_list[[query_gene]] <- top_for_query
+        }
+    }
+    
+    # Combine all results
+    all_similar <- do.call(rbind, all_similar_list)
+    
+    # Deduplicate and rank by best correlation across all query genes
     gene_summary <- all_similar %>%
         group_by(similar_gene) %>%
         summarise(
@@ -381,10 +408,9 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
             query_genes = paste(query_gene, collapse = ", "),
             .groups = "drop"
         ) %>%
-        arrange(desc(avg_correlation)) %>%
-        head(n_similar)
+        arrange(desc(max_correlation))  # Rank by best correlation, not average
     
-    log_message(paste("Final results: top", nrow(gene_summary), "co-expressed genes identified"))
+    log_message(paste("Final results:", nrow(gene_summary), "unique co-expressed genes identified (", n_similar, "per query gene, deduplicated)"))
     
     # Create a minimal correlation matrix for network visualization
     # Only include query genes and top similar genes
@@ -417,7 +443,7 @@ find_coexpressed_genes_streaming <- function(expr_filtered, available_query_gene
         query_genes_used = available_query_genes,
         correlation_matrix = correlation_matrix,
         detailed_correlations = all_similar,
-        message = paste("Found", nrow(gene_summary), "co-expressed genes (streaming mode)")
+        message = paste("Found", nrow(gene_summary), "unique co-expressed genes (", n_similar, "per query gene, deduplicated, streaming mode)")
     ))
 }
 
@@ -825,10 +851,28 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
         ))
     }
     
-    # Combine all results from all batches
-    all_similar <- do.call(rbind, all_batch_results)
+    # Combine all results from all batches - need to group by query gene first
+    all_similar_raw <- do.call(rbind, all_batch_results)
     
-    # Calculate average correlation for each similar gene across all query genes
+    # Group by query gene and take top n_similar for each query gene
+    similar_genes_list <- split(all_similar_raw, all_similar_raw$query_gene)
+    all_similar_list <- list()
+    
+    for (query_gene in names(similar_genes_list)) {
+        query_results <- similar_genes_list[[query_gene]]
+        if (nrow(query_results) > 0) {
+            # Take top n_similar for this query gene
+            top_for_query <- query_results %>%
+                arrange(desc(abs(correlation))) %>%
+                head(n_similar)
+            all_similar_list[[query_gene]] <- top_for_query
+        }
+    }
+    
+    # Combine all results
+    all_similar <- do.call(rbind, all_similar_list)
+    
+    # Deduplicate and rank by best correlation across all query genes
     gene_summary <- all_similar %>%
         group_by(similar_gene) %>%
         summarise(
@@ -840,10 +884,9 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
             query_genes = paste(query_gene, collapse = ", "),
             .groups = "drop"
         ) %>%
-        arrange(desc(avg_correlation)) %>%
-        head(n_similar)
+        arrange(desc(max_correlation))  # Rank by best correlation, not average
     
-    log_message(paste("Final results: top", nrow(gene_summary), "co-expressed genes identified (parallel mode)"))
+    log_message(paste("Final results:", nrow(gene_summary), "unique co-expressed genes identified (", n_similar, "per query gene, deduplicated, parallel mode)"))
     
     # Create a minimal correlation matrix for network visualization
     # Only include query genes and top similar genes
@@ -878,7 +921,7 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
         query_genes_used = available_query_genes,
         correlation_matrix = correlation_matrix,
         detailed_correlations = all_similar,
-        message = paste("Found", nrow(gene_summary), "co-expressed genes (parallel streaming mode)")
+        message = paste("Found", nrow(gene_summary), "unique co-expressed genes (", n_similar, "per query gene, deduplicated, parallel streaming mode)")
     ))
 }
 
@@ -1124,12 +1167,14 @@ create_coexpression_tab_ui <- function() {
                     ),
                     
                     numericInput("n_similar_genes",
-                        "Number of Similar Genes:",
+                        "Similar Genes Per Query Gene:",
                         value = 25,
                         min = 1,
                         max = 250,
                         step = 1
                     ),
+                    helpText("Finds the top N most correlated genes for each query gene, then combines and deduplicates results.",
+                           class = "help-text"),
                     
                     numericInput("max_genes_batch",
                         "Batch Size (for large datasets):",

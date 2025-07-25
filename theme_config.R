@@ -289,10 +289,11 @@ generate_app_css <- function(theme) {
         
         .compact-mode-selector .radio input[type=\"radio\"]:checked + span {
             background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
-            color: white;
-            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
-            transform: translateY(-1px);
-            font-weight: 700;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.4) !important;
+            transform: translateY(-2px) !important;
+            font-weight: 700 !important;
+            border: 2px solid rgba(255, 255, 255, 0.3) !important;
         }
         
         .compact-mode-selector .radio input[type=\"radio\"]:checked + span::before {
@@ -350,7 +351,7 @@ generate_app_css <- function(theme) {
         .cell-type-toggle-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 6px;
+            gap: 8px;
             margin-bottom: 12px;
             max-width: 100%;
             overflow: hidden;
@@ -363,15 +364,15 @@ generate_app_css <- function(theme) {
         }
         
         .cell-type-toggle-btn {
-            padding: 6px 8px;
+            padding: 8px 10px;
             border: 2px solid #6c757d;
             border-radius: 6px;
             background-color: #6c757d;
             color: white;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 500;
             cursor: pointer;
-            transition: background-color 0.15s ease;
+            transition: all 0.2s ease;
             text-align: center;
             width: 100%;
             max-width: 100%;
@@ -380,11 +381,18 @@ generate_app_css <- function(theme) {
             overflow: hidden;
             text-overflow: ellipsis;
             box-sizing: border-box;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .cell-type-toggle-btn:hover {
             background-color: ", theme$background_white, ";
             border-color: ", theme$primary_color, ";
+            color: ", theme$primary_color, ";
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .cell-type-toggle-btn.active {
@@ -392,14 +400,13 @@ generate_app_css <- function(theme) {
             border-color: ", theme$primary_color, ";
             color: white;
             font-weight: bold;
+            box-shadow: 0 2px 6px rgba(220, 20, 60, 0.3);
         }
         
         .cell-type-toggle-btn.inactive {
             background-color: #6c757d;
             border-color: #6c757d;
             color: #ffffff;
-            opacity: 0.7;
-        }
         
         .cell-type-toggle-section {
             margin-bottom: 12px;
@@ -421,8 +428,10 @@ generate_app_css <- function(theme) {
         /* === SIDEBAR STYLING === */
         .main-sidebar {
             background-color: ", theme$background_dark, " !important;
-            max-width: 300px;
+            width: 350px !important;
+            max-width: 350px !important;
             overflow-x: hidden;
+            overflow-y: auto;
         }
 
         .sidebar {
@@ -430,6 +439,7 @@ generate_app_css <- function(theme) {
             color: ", theme$text_white, ";
             padding-right: 15px;
             box-sizing: border-box;
+            width: 100%;
         }
 
         .sidebar-menu > li > a {
@@ -449,17 +459,7 @@ generate_app_css <- function(theme) {
             overflow: hidden;
         }
         
-        .sidebar .form-group label {
-            color: ", theme$text_white, " !important;
-            font-weight: 600;
-            font-size: ", theme$font_size_body, ";
-            margin-bottom: ", theme$spacing_sm, ";
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
+        /* === ENHANCED SIDEBAR FORM CONTROLS === */
         .sidebar .form-control {
             background-color: ", theme$background_white, " !important;
             border: 1px solid ", theme$border_medium, " !important;
@@ -597,7 +597,52 @@ generate_app_css <- function(theme) {
             margin-bottom: ", theme$spacing_sm, " !important;
         }
         
-        .sidebar .radio label {
+        /* === ENHANCED FILE UPLOAD STYLING === */
+        .sidebar .form-group input[type=\"file\"] {
+            border: 2px dashed ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_md, " !important;
+            background-color: ", theme$background_white, " !important;
+            padding: 12px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            font-size: ", theme$font_size_small, " !important;
+            color: ", theme$text_secondary, " !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .sidebar .form-group input[type=\"file\"]:hover {
+            border-color: ", theme$primary_color, " !important;
+            background-color: rgba(220, 20, 60, 0.05) !important;
+        }
+        
+        .sidebar .form-group input[type=\"file\"]:focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.2) !important;
+            outline: none !important;
+        }
+        
+        /* === IMPROVED TEXTAREA STYLING === */
+        .sidebar textarea.form-control {
+            resize: vertical !important;
+            min-height: 120px !important;
+            font-family: ", theme$font_family_mono, " !important;
+            font-size: ", theme$font_size_small, " !important;
+            line-height: 1.4 !important;
+            background-color: ", theme$background_white, " !important;
+            border: 2px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_md, " !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .sidebar textarea.form-control:focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.1) !important;
+            outline: none !important;
+        }
+        
+        .sidebar textarea.form-control:hover {
+            border-color: rgba(220, 20, 60, 0.6) !important;
+        }
             color: ", theme$text_white, " !important;
             font-weight: normal !important;
             font-size: ", theme$font_size_body, " !important;
@@ -627,17 +672,20 @@ generate_app_css <- function(theme) {
         
         /* === SECTION DIVIDERS === */
         .gene-selection-container,
-        .product-grouping-section {
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+        .product-grouping-section,
+        .contrast-selection-container {
+            border-bottom: 2px solid rgba(255,255,255,0.15);
             padding-bottom: ", theme$spacing_lg, ";
             margin-bottom: ", theme$spacing_lg, ";
             max-width: 100%;
             overflow: hidden;
             box-sizing: border-box;
+            position: relative;
         }
         
         .gene-selection-container:last-child,
-        .product-grouping-section:last-child {
+        .product-grouping-section:last-child,
+        .contrast-selection-container:last-child {
             border-bottom: none;
         }
         
@@ -645,6 +693,38 @@ generate_app_css <- function(theme) {
             max-width: 100%;
             overflow: hidden;
             box-sizing: border-box;
+        }
+        
+        /* Add subtle background for better section separation */
+        .gene-selection-container {
+            background-color: rgba(220, 20, 60, 0.05);
+            border-radius: ", theme$radius_md, ";
+            border: 1px solid rgba(220, 20, 60, 0.1);
+            padding: ", theme$spacing_lg, ";
+        }
+        
+        .contrast-selection-container {
+            background-color: rgba(23, 162, 184, 0.05);
+            border-radius: ", theme$radius_md, ";
+            border: 1px solid rgba(23, 162, 184, 0.1);
+            padding: ", theme$spacing_lg, ";
+        }
+        
+        /* === IMPROVED FORM SPACING === */
+        .sidebar .form-group {
+            margin-bottom: ", theme$spacing_lg, ";
+            max-width: 100%;
+            overflow: hidden;
+        }
+        
+        .sidebar .form-group label {
+            color: ", theme$text_white, " !important;
+            font-weight: 600;
+            font-size: ", theme$font_size_body, ";
+            margin-bottom: ", theme$spacing_sm, ";
+            display: block;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         /* === SIDEBAR ACTION BUTTONS === */
@@ -691,8 +771,36 @@ generate_app_css <- function(theme) {
             border-top: 1px solid rgba(255,255,255,0.1);
             padding-top: ", theme$spacing_md, ";
         }
+        
+        /* === FILE UPLOAD STYLING === */
+        .sidebar .form-group .shiny-input-container input[type='file'] {
+            background-color: ", theme$background_white, " !important;
+            border: 2px dashed ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_md, " !important;
+            padding: 16px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            transition: border-color 0.2s ease !important;
+            font-size: ", theme$font_size_small, " !important;
+        }
+        
+        .sidebar .form-group .shiny-input-container input[type='file']:hover {
+            border-color: ", theme$primary_color, " !important;
+            background-color: rgba(220, 20, 60, 0.02) !important;
+        }
+        
+        .sidebar .form-group .shiny-input-container input[type='file']:focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25) !important;
+            outline: none !important;
+        }
 
         /* === CONTENT AREA === */
+        .content-wrapper {
+            margin-left: 350px !important;
+            background-color: ", theme$background_white, " !important;
+        }
+        
         .content {
             background-color: ", theme$background_white, " !important;
             padding: ", theme$spacing_lg, ";
@@ -793,10 +901,36 @@ generate_app_css <- function(theme) {
         /* === DATA TABLE STYLING === */
         .dataTables_wrapper {
             font-size: ", theme$font_size_small, ";
+            overflow-x: auto;
+        }
+        
+        .dataTables_wrapper .dataTable {
+            width: 100% !important;
+            border-collapse: collapse;
+        }
+        
+        .dataTables_wrapper .dataTable th,
+        .dataTables_wrapper .dataTable td {
+            padding: 8px 12px !important;
+            word-wrap: break-word;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: ", theme$font_size_small, " !important;
+        }
+        
+        .dataTables_wrapper .dataTable th {
+            background-color: ", theme$background_light, " !important;
+            font-weight: bold !important;
+            border-bottom: 2px solid ", theme$border_medium, " !important;
         }
 
         .table-striped > tbody > tr:nth-of-type(odd) {
             background-color: ", theme$background_light, ";
+        }
+        
+        .table-striped > tbody > tr:nth-of-type(even) {
+            background-color: ", theme$background_white, ";
         }
 
         .dt-group1 {
@@ -978,6 +1112,76 @@ generate_app_css <- function(theme) {
                 gap: 10px !important;
                 flex-direction: column !important;
             }
+        }
+        
+        /* === FILE INPUT IMPROVEMENTS === */
+        .form-group .shiny-input-container input[type='file'] {
+            background-color: rgba(255,255,255,0.9) !important;
+            border: 1px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_sm, " !important;
+            padding: 8px 12px !important;
+            font-size: ", theme$font_size_small, " !important;
+            color: ", theme$text_primary, " !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .form-group .shiny-input-container input[type='file']:hover {
+            border-color: ", theme$primary_color, " !important;
+            background-color: rgba(255,255,255,1) !important;
+        }
+        
+        .form-group .shiny-input-container input[type='file']:focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.1) !important;
+        }
+        
+        /* File upload container styling */
+        .form-group .shiny-input-container label {
+            color: ", theme$text_white, " !important;
+            font-weight: 500 !important;
+            margin-bottom: 8px !important;
+        }
+        
+        /* Progress bar for file uploads */
+        .progress {
+            background-color: rgba(255,255,255,0.1) !important;
+            border-radius: ", theme$radius_sm, " !important;
+        }
+        
+        .progress-bar {
+            background-color: ", theme$primary_color, " !important;
+        }
+        
+        /* === GENE VALIDATION STYLING === */
+        .gene-validation-container {
+            background-color: ", theme$background_light, " !important;
+            border: 1px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_sm, " !important;
+            padding: 10px !important;
+            margin: 8px 0 !important;
+            color: ", theme$text_primary, " !important;
+            font-size: ", theme$font_size_small, " !important;
+        }
+        
+        .gene-validation-container .validation-summary {
+            font-weight: bold !important;
+            color: ", theme$text_primary, " !important;
+            margin-bottom: 6px !important;
+        }
+        
+        .gene-validation-container .validation-valid {
+            color: ", theme$success_color, " !important;
+            font-weight: bold !important;
+        }
+        
+        .gene-validation-container .validation-invalid {
+            color: ", theme$error_color, " !important;
+            font-weight: bold !important;
+        }
+        
+        .gene-validation-container .validation-suggestions {
+            color: ", theme$info_color, " !important;
+            font-weight: bold !important;
         }
     "))
 }
