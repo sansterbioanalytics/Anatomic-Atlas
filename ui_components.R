@@ -1,7 +1,8 @@
 # =============================================================================
 # UI Components Module for Anatomic RNA Atlas
 # Contains reusable UI components and layout functions
-# =============================================================================
+# =============================================================================  
+
 
 # Required libraries for this module
 suppressPackageStartupMessages({
@@ -18,36 +19,37 @@ suppressPackageStartupMessages({
 # Create application header with logo, title, and mode selector
 create_app_header <- function(theme) {
     dashboardHeader(
-        title = NULL,  # Remove default title to create custom header
-        titleWidth = 0,  # Remove title width to prevent spacing issues
+        title = div(
+            # Custom logo that will replace the default title area
+            tags$a(
+                href = theme$logo_link_url,
+                target = "_blank",
+                class = "logo-link",
+                style = "display: flex; align-items: center; height: 60px; padding-left: 15px;",
+                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
+                    style = "height: 42px; transition: transform 0.2s ease;"),
+                onmouseover = "this.querySelector('img').style.transform = 'scale(1.05)'",
+                onmouseout = "this.querySelector('img').style.transform = 'scale(1)'"
+            )
+        ),
+        titleWidth = 200,  # Reserve space for logo
+        
+        # Add title and mode selector in the navbar area
         tags$li(
-            class = "dropdown custom-header-container",
-            style = "width: 100%; display: flex; align-items: center; justify-content: flex-start; padding: 0; margin: 0; height: 50px;",
+            class = "dropdown",
+            style = "margin: 0; padding: 0; height: 60px; display: flex; align-items: center;",
             
-            # Left side: Logo
+            # Center content container
             div(
-                class = "header-logo-section",
-                style = "display: flex; align-items: center; flex-shrink: 0; padding-left: 15px;",
-                tags$a(
-                    href = theme$logo_link_url,
-                    target = "_blank",
-                    class = "logo-link",
-                    img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
-                        style = "height: 36px; margin-right: 15px;")
-                )
-            ),
-            
-            # Title and Mode Selector - left-aligned
-            div(
-                class = "header-center-section",
-                style = "display: flex; align-items: center; margin-left: 5px; gap: 15px;",
+                class = "header-center-content",
+                style = "display: flex; align-items: center; gap: 30px; height: 60px; margin-left: 20px;",
                 
-                # Application Title
-                h2("Anatomic RNA Atlas", 
+                # Application Title with gradient effect
+                h1("Anatomic RNA Atlas", 
                    class = "header-title",
-                   style = paste0("margin: 0; color: ", theme$text_primary, "; font-weight: 700; font-size: 22px; letter-spacing: -0.5px;")),
+                   style = paste0("margin: 0; font-weight: 700; font-size: 26px; letter-spacing: -0.8px;")),
                 
-                # Mode Selector Buttons - Compact
+                # Mode Selector Buttons - Modern design
                 create_compact_mode_selector_ui(theme)
             )
         )
@@ -58,62 +60,21 @@ create_app_header <- function(theme) {
 # Mode Selector Component  
 # =============================================================================
 
-# Create compact mode selector UI component for header
+# Create compact mode selector UI component for header - Modern design
 create_compact_mode_selector_ui <- function(theme) {
     div(
         class = "compact-mode-selector",
-        style = "display: flex; gap: 8px; align-items: center;",
+        style = "display: flex; gap: 6px; align-items: center;",
         
-        # Target Mode Button - Compact
-        actionButton("mode_target",
-            HTML("<div style='display: flex; align-items: center; gap: 6px;'>
-                    <i class='fa fa-bullseye' style='font-size: 14px;'></i>
-                    <span style='font-weight: 600;'>Target Mode</span>
-                  </div>"),
-            class = "mode-button mode-target-btn",
-            style = paste0("
-                background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
-                border: none;
-                border-radius: 8px;
-                color: white;
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 500;
-                box-shadow: 0 2px 6px rgba(220, 20, 60, 0.3);
-                transition: all 0.3s ease;
-                cursor: pointer;
-                height: 36px;
-            ")
-        ),
-        
-        # Explorer Mode Button - Compact
-        actionButton("mode_explorer",
-            HTML("<div style='display: flex; align-items: center; gap: 6px;'>
-                    <i class='fa fa-flask' style='font-size: 14px;'></i>
-                    <span style='font-weight: 600;'>Explorer Mode</span>
-                  </div>"),
-            class = "mode-button mode-explorer-btn",
-            style = paste0("
-                background: ", theme$background_light, ";
-                border: 2px solid ", theme$border_medium, ";
-                border-radius: 8px;
-                color: ", theme$text_secondary, ";
-                padding: 8px 16px;
-                font-size: 12px;
-                font-weight: 500;
-                transition: all 0.3s ease;
-                cursor: pointer;
-                height: 36px;
-            ")
-        ),
-        
-        # Hidden radio buttons for JavaScript compatibility
-        div(style = "display: none;",
-            radioButtons("app_mode",
-                label = NULL,
-                choices = list("Target Mode" = "target", "Explorer Mode" = "explorer"),
-                selected = "target"
-            )
+        # Use Shiny's radioButtons with custom CSS styling to look like modern toggle buttons
+        radioButtons("app_mode",
+            label = NULL,
+            choices = list(
+                "Target Mode" = "target",
+                "Explorer Mode" = "explorer"
+            ),
+            selected = "target",
+            inline = TRUE
         )
     )
 }
@@ -187,16 +148,16 @@ create_explorer_mode_controls <- function(theme) {
     div(
         class = "explorer-mode-controls",
         tagList(
+            # Gene selection section FIRST - matching target mode layout
+            div(
+                class = "gene-selection-container",
+                create_gene_selection_ui(theme)
+            ),
+            
             # Contrast selection section with consistent styling
             div(
                 class = "product-grouping-section",
                 create_contrast_selection_ui(theme)
-            ),
-            
-            # Gene selection section with consistent styling
-            div(
-                class = "gene-selection-container",
-                create_gene_selection_ui(theme)
             ),
             
             # Analysis options section
@@ -209,7 +170,7 @@ create_explorer_mode_controls <- function(theme) {
 create_product_grouping_ui <- function(theme) {
     div(
         class = "product-grouping-container",
-        style = paste0("margin: ", theme$spacing_lg, ";"),
+        style = paste0("margin: ", theme$spacing_sm, ";"),
         
         h5("Cell Type Selection", 
            style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_md, ";")),
@@ -243,9 +204,7 @@ create_product_grouping_ui <- function(theme) {
                                style = "font-size: 10px; padding: 4px 8px;")
                 )
             )
-        ),
-        
-        br()
+        )
     )
 }
 
@@ -277,22 +236,20 @@ create_target_gene_selection_ui <- function(theme) {
         # Section header
         h5("Target Gene Selection", style = paste0("color: ", theme$text_white, "; margin-bottom: ", theme$spacing_sm, ";")),
         
-        # Single gene input with search
+        # Server-side gene input optimized for large datasets
         selectizeInput("target_gene_input",
             "Enter Gene Symbol(s):",
             choices = NULL,
             multiple = TRUE,
             options = list(
-                placeholder = "Type gene symbols...",
-                maxItems = 20,
-                create = FALSE
+                placeholder = "Type to search for genes...",
+                maxItems = 25
             )
         ),
         
-        # Display selected genes
-        uiOutput("target_genes_display"),
-        
-        br()
+        helpText("Start typing to search through available genes. Multiple genes can be selected for comparison.",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, ";"))
     )
 }
 
@@ -385,11 +342,14 @@ create_gene_selection_ui <- function(theme) {
                 choices = NULL,
                 multiple = TRUE,
                 options = list(
-                    placeholder = "Search for genes...",
-                    maxItems = 20,
-                    create = FALSE
+                    placeholder = "Type to search for genes...",
+                    maxItems = 25
                 )
-            )
+            ),
+            
+            helpText("Start typing to search through available genes. Multiple genes can be selected for analysis.",
+                    class = "help-text",
+                    style = paste0("color: ", theme$text_light, "; font-size: ", theme$font_size_small, ";"))
         ),
         
         # Display selected genes information
@@ -791,7 +751,6 @@ create_portfolio_ranking_box <- function() {
                         class = "help-text"),
                 plotlyOutput("portfolio_ranking_plot", height = "400px") %>% withSpinner(),
                 hr(),
-                h5("Expression Summary by Product"),
                 DT::dataTableOutput("portfolio_summary_table", height = "350px") %>% withSpinner()
             ),
             tabPanel(

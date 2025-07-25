@@ -3,7 +3,7 @@
 # Contains plotting functions and visualization helpers
 # =============================================================================
 
-# Required libraries for this module
+# Suppress package startup messages
 suppressPackageStartupMessages({
     library(ggplot2)
     library(plotly)
@@ -11,6 +11,7 @@ suppressPackageStartupMessages({
     library(tidyr)
     library(viridis)
     library(RColorBrewer)
+    library(tibble)
 })
 
 # =============================================================================
@@ -233,6 +234,424 @@ create_group_barplot <- function(contrast_data, group1, group2, plot_theme = NUL
         )
     
     return(ggplotly(p, tooltip = c("x", "y", "fill")))
+}
+
+# =============================================================================
+# Target Mode Specific Plot Functions
+# =============================================================================
+
+# Create portfolio ranking plot for target mode
+create_portfolio_ranking_plot <- function(expression_data, sample_data, selected_genes, 
+                                        data_type = "log2_cpm", plot_theme = NULL, 
+                                        enabled_cell_types = NULL) {
+    
+    if (is.null(selected_genes) || length(selected_genes) == 0) {
+        return(create_empty_plot("Select genes to display portfolio ranking", plot_theme))
+    }
+    
+    # Set default theme if none provided
+    if (is.null(plot_theme)) {
+        plot_theme <- list(
+            primary_color = "#DC143C",
+            text_secondary = "#666666",
+            background = "#FFFFFF",
+            text_color = "#000000"
+        )
+    }
+    
+    # Get column names
+    celltype_col <- if ("PubCelltype" %in% colnames(sample_data)) {
+        "PubCelltype"
+    } else if ("Celltype" %in% colnames(sample_data)) {
+        "Celltype"
+    } else if ("celltype" %in% colnames(sample_data)) {
+        "celltype"
+    } else {
+        return(create_empty_plot("Cannot find cell type column in sample data", plot_theme))
+    }
+    
+    sample_col <- if ("PubName" %in% colnames(sample_data)) {
+        "PubName"
+    } else if ("Name" %in% colnames(sample_data)) {
+        "Name"
+    } else {
+        return(create_empty_plot("Cannot find sample column in sample data", plot_theme))
+    }
+    
+    # Filter sample data by enabled cell types first if provided
+    filtered_sample_data <- if (!is.null(enabled_cell_types) && length(enabled_cell_types) > 0) {
+        sample_data %>% filter(!!sym(celltype_col) %in% enabled_cell_types)
+    } else {
+        sample_data
+    }
+    
+    # Filter expression data and join with filtered sample metadata
+    plot_data <- expression_data %>%
+        filter(
+            gene %in% selected_genes,
+            data_type == !!data_type
+        ) %>%
+        left_join(
+            filtered_sample_data %>%
+                select(all_of(c(sample_col, celltype_col))) %>%
+                rename(sample = !!sample_col, celltype = !!celltype_col),
+            by = "sample"
+        ) %>%
+        filter(!is.na(celltype))
+    
+    if (nrow(plot_data) == 0) {
+        return(create_empty_plot("No expression data available for selected genes", plot_theme))
+    }
+    
+    # Define product categories for visual separation and color coding
+    real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+    hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
+    primary_products <- c("hDRG", "hMelo_1", "hSCP")
+    
+    # Calculate mean expression by cell type and add category information
+    celltype_means <- plot_data %>%
+        group_by(celltype) %>%
+        summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+        mutate(
+            product_category = case_when(
+                celltype %in% real_products ~ "Real* Products",
+                celltype %in% hipsc_products ~ "Human iPSC",
+                celltype %in% primary_products ~ "Primary Cells",
+                TRUE ~ "Other"
+            ),
+            # Assign colors based on category
+            bar_color = case_when(
+                product_category == "Real* Products" ~ "#DC143C",
+                product_category == "Human iPSC" ~ "#FF8C00",
+                product_category == "Primary Cells" ~ "#228B22",
+                TRUE ~ "#808080"
+            )
+        ) %>%
+        arrange(desc(mean_expression))
+    
+    # Calculate individual gene means by cell type for overlay points
+    gene_means <- plot_data %>%
+        group_by(celltype, gene) %>%
+        summarise(gene_mean_expression = mean(expression, na.rm = TRUE), .groups = "drop")
+    
+    # Create y-axis label
+    y_label <- if (data_type == "log2_cpm") "Mean log2(CPM + 1)" else "Mean VST"
+    
+    # Create title based on number of selected genes
+    title_text <- if (length(selected_genes) == 1) {
+        paste("Portfolio Expression Ranking:", selected_genes[1])
+    } else {
+        paste("Portfolio Expression Ranking (", length(selected_genes), "genes)")
+    }
+    
+    # Create the plot with category-based colors
+    p <- plot_ly() %>%
+        add_bars(
+            data = celltype_means,
+            x = ~mean_expression,
+            y = ~reorder(celltype, mean_expression),
+            orientation = 'h',
+            name = "Product Average",
+            marker = list(
+                color = ~bar_color,
+                opacity = 0.8,
+                line = list(color = "white", width = 1)
+            ),
+            hovertemplate = paste0(
+                "<b>Product:</b> %{y}<br>",
+                "<b>Category:</b> %{customdata}<br>",
+                "<b>", y_label, ":</b> %{x:.3f}<br>",
+                "<extra></extra>"
+            ),
+            customdata = ~product_category
+        ) %>%
+        add_markers(
+            data = gene_means,
+            x = ~gene_mean_expression,
+            y = ~celltype,
+            name = "Individual Genes",
+            marker = list(
+                color = "#666666",
+                size = 6,
+                opacity = 0.7,
+                symbol = "diamond"
+            ),
+            hovertemplate = paste0(
+                "<b>Gene:</b> %{text}<br>",
+                "<b>Product:</b> %{y}<br>",
+                "<b>", y_label, ":</b> %{x:.3f}<br>",
+                "<extra></extra>"
+            ),
+            text = ~gene
+        ) %>%
+        layout(
+            title = list(
+                text = title_text,
+                font = list(size = 14, color = plot_theme$text_color)
+            ),
+            xaxis = list(
+                title = y_label,
+                titlefont = list(size = 12, color = plot_theme$text_color),
+                tickfont = list(size = 10, color = plot_theme$text_color)
+            ),
+            yaxis = list(
+                title = "Anatomic Product",
+                titlefont = list(size = 12, color = plot_theme$text_color),
+                tickfont = list(size = 10, color = plot_theme$text_color)
+            ),
+            showlegend = TRUE,
+            legend = list(
+                x = 0.7, y = 0.1,
+                font = list(size = 10, color = plot_theme$text_color)
+            ),
+            plot_bgcolor = plot_theme$background,
+            paper_bgcolor = plot_theme$background,
+            margin = list(l = 150, r = 50, t = 50, b = 50)
+        ) %>%
+        config(displayModeBar = FALSE)
+    
+    return(p)
+}
+
+# Create target heatmap with genes on X-axis and products on Y-axis
+create_target_heatmap <- function(expression_data, sample_data, selected_genes, 
+                                 data_type = "log2_cpm", plot_theme = NULL,
+                                 enabled_cell_types = NULL) {
+    
+    if (is.null(selected_genes) || length(selected_genes) == 0) {
+        return(create_empty_plot("Select genes to display target heatmap", plot_theme))
+    }
+    
+    # Set default theme if none provided
+    if (is.null(plot_theme)) {
+        plot_theme <- list(
+            background = "#FFFFFF",
+            text_color = "#000000"
+        )
+    }
+    
+    # Get column names
+    celltype_col <- if ("PubCelltype" %in% colnames(sample_data)) {
+        "PubCelltype"
+    } else if ("Celltype" %in% colnames(sample_data)) {
+        "Celltype"
+    } else if ("celltype" %in% colnames(sample_data)) {
+        "celltype"
+    } else {
+        return(create_empty_plot("Cannot find cell type column in sample data", plot_theme))
+    }
+    
+    sample_col <- if ("PubName" %in% colnames(sample_data)) {
+        "PubName"
+    } else if ("Name" %in% colnames(sample_data)) {
+        "Name"
+    } else {
+        return(create_empty_plot("Cannot find sample column in sample data", plot_theme))
+    }
+    
+    # Filter sample data by enabled cell types first if provided
+    filtered_sample_data <- if (!is.null(enabled_cell_types) && length(enabled_cell_types) > 0) {
+        sample_data %>% filter(!!sym(celltype_col) %in% enabled_cell_types)
+    } else {
+        sample_data
+    }
+    
+    # Filter expression data and join with filtered sample metadata
+    plot_data <- expression_data %>%
+        filter(
+            gene %in% selected_genes,
+            data_type == !!data_type
+        ) %>%
+        left_join(
+            filtered_sample_data %>%
+                select(all_of(c(sample_col, celltype_col))) %>%
+                rename(sample = !!sample_col, celltype = !!celltype_col),
+            by = "sample"
+        ) %>%
+        filter(!is.na(celltype))
+    
+    if (nrow(plot_data) == 0) {
+        return(create_empty_plot("No expression data available for selected genes", plot_theme))
+    }
+    
+    # Calculate mean expression by gene and cell type
+    heatmap_data <- plot_data %>%
+        group_by(gene, celltype) %>%
+        summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
+    
+    # Create matrix for heatmap (genes as columns, cell types as rows)
+    heatmap_matrix <- heatmap_data %>%
+        pivot_wider(names_from = gene, values_from = mean_expr, values_fill = 0) %>%
+        column_to_rownames("celltype") %>%
+        as.matrix()
+    
+    # Create data type label for title and hover
+    data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
+    
+    # Create title
+    title_text <- paste("Target Heatmap:", data_type_label)
+    
+    # Create the heatmap
+    p <- plot_ly(
+        z = ~heatmap_matrix,
+        x = colnames(heatmap_matrix),  # Genes on X-axis
+        y = rownames(heatmap_matrix),  # Products (cell types) on Y-axis
+        type = "heatmap",
+        colorscale = "Viridis",
+        hovertemplate = paste0(
+            "<b>Gene:</b> %{x}<br>",
+            "<b>Product:</b> %{y}<br>",
+            "<b>", data_type_label, ":</b> %{z:.3f}<br>",
+            "<extra></extra>"
+        )
+    ) %>%
+        layout(
+            title = list(
+                text = title_text,
+                font = list(size = 14, color = plot_theme$text_color)
+            ),
+            xaxis = list(
+                title = "Gene",
+                titlefont = list(size = 12, color = plot_theme$text_color),
+                tickfont = list(size = 10, color = plot_theme$text_color),
+                tickangle = -45
+            ),
+            yaxis = list(
+                title = "Anatomic Product",
+                titlefont = list(size = 12, color = plot_theme$text_color),
+                tickfont = list(size = 10, color = plot_theme$text_color)
+            ),
+            plot_bgcolor = plot_theme$background,
+            paper_bgcolor = plot_theme$background,
+            margin = list(l = 150, r = 50, t = 80, b = 100)
+        ) %>%
+        config(displayModeBar = TRUE)
+    
+    return(p)
+}
+
+# Create portfolio summary table data
+create_portfolio_summary_table <- function(expression_data, sample_data, selected_genes, 
+                                          data_type = "log2_cpm", enabled_cell_types = NULL) {
+    
+    if (is.null(selected_genes) || length(selected_genes) == 0) {
+        return(data.frame(Message = "Select genes to display portfolio summary"))
+    }
+    
+    # Get column names
+    celltype_col <- if ("PubCelltype" %in% colnames(sample_data)) {
+        "PubCelltype"
+    } else if ("Celltype" %in% colnames(sample_data)) {
+        "Celltype"
+    } else if ("celltype" %in% colnames(sample_data)) {
+        "celltype"
+    } else {
+        return(data.frame(Message = "Cannot find cell type column in sample data"))
+    }
+    
+    sample_col <- if ("PubName" %in% colnames(sample_data)) {
+        "PubName"
+    } else if ("Name" %in% colnames(sample_data)) {
+        "Name"
+    } else {
+        return(data.frame(Message = "Cannot find sample column in sample data"))
+    }
+    
+    # Filter sample data by enabled cell types first if provided
+    filtered_sample_data <- if (!is.null(enabled_cell_types) && length(enabled_cell_types) > 0) {
+        sample_data %>% filter(!!sym(celltype_col) %in% enabled_cell_types)
+    } else {
+        sample_data
+    }
+    
+    # Filter expression data and join with filtered sample metadata
+    plot_data <- expression_data %>%
+        filter(
+            gene %in% selected_genes,
+            data_type == !!data_type
+        ) %>%
+        left_join(
+            filtered_sample_data %>%
+                select(all_of(c(sample_col, celltype_col))) %>%
+                rename(sample = !!sample_col, celltype = !!celltype_col),
+            by = "sample"
+        ) %>%
+        filter(!is.na(celltype))
+    
+    if (nrow(plot_data) == 0) {
+        return(data.frame(Message = "No expression data available for selected genes"))
+    }
+    
+    # Define product categories for visual separation
+    real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+    hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
+    primary_products <- c("hDRG", "hMelo_1", "hSCP")
+    
+    # Calculate statistics by product
+    product_stats <- plot_data %>%
+        group_by(celltype) %>%
+        summarise(
+            n_samples = n_distinct(sample),
+            mean_expression = mean(expression, na.rm = TRUE),
+            median_expression = median(expression, na.rm = TRUE),
+            max_expression = max(expression, na.rm = TRUE),
+            .groups = "drop"
+        ) %>%
+        mutate(
+            # Categorize products
+            product_category = case_when(
+                celltype %in% real_products ~ "Real* Products",
+                celltype %in% hipsc_products ~ "Human iPSC", 
+                celltype %in% primary_products ~ "Primary Cells",
+                TRUE ~ "Other"
+            )
+        ) %>%
+        # Sort by category (Real* first), then by mean expression within category
+        arrange(
+            factor(product_category, levels = c("Real* Products", "Human iPSC", "Primary Cells", "Other")),
+            desc(mean_expression)
+        ) %>%
+        mutate(
+            ranking = row_number(),
+            expression_level = case_when(
+                mean_expression >= quantile(mean_expression, 0.8) ~ "Very High",
+                mean_expression >= quantile(mean_expression, 0.6) ~ "High",
+                mean_expression >= quantile(mean_expression, 0.4) ~ "Medium",
+                mean_expression >= quantile(mean_expression, 0.2) ~ "Low",
+                TRUE ~ "Very Low"
+            )
+        )
+    
+    # Create data type label for column names
+    data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
+    
+    # Format the table with improved column names
+    result_table <- product_stats %>%
+        select(
+            Product = celltype,
+            Category = product_category,
+            Rank = ranking,
+            Level = expression_level,
+            Samples = n_samples,
+            Mean = mean_expression,
+            Median = median_expression,
+            Max = max_expression
+        ) %>%
+        mutate(
+            Mean = round(Mean, 3),
+            Median = round(Median, 3),
+            Max = round(Max, 3)
+        )
+    
+    # Update column names with data type - more concise headers
+    colnames(result_table)[6:8] <- paste0(c("Mean", "Median", "Max"), " (", data_type_label, ")")
+    
+    # Return the raw data table - let app.R handle DT formatting
+    if (nrow(result_table) > 0) {
+        return(result_table)
+    } else {
+        return(data.frame(Message = "No data available for selected genes and cell types"))
+    }
 }
 
 # =============================================================================

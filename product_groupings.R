@@ -19,7 +19,7 @@ product_groupings <- list(
     
     # hiPSC-derived Products
     "human_iPSC" = list(
-        name = "hiPSC Products", 
+        name = "Human iPSC", 
         description = "Human induced pluripotent stem cell-derived products",
         cell_types = c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2"),
         default_enabled = FALSE  # These should be disabled by default

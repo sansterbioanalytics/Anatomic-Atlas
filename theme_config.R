@@ -96,86 +96,117 @@ generate_app_css <- function(theme) {
             font-family: ", theme$font_family_primary, ";
             color: ", theme$text_primary, ";
         }
+        
+        /* Smooth transitions for better UX */
+        * {
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+        
+        /* Remove default focus outline and add custom styling */
+        *:focus {
+            outline: none !important;
+        }
 
-        /* === HEADER STYLING === */
+        /* === MODERN HEADER STYLING === */
         .main-header {
-            background-color: ", theme$background_white, " !important;
-            border-bottom: 2px solid ", theme$primary_color, " !important;
+            background: linear-gradient(135deg, ", theme$background_white, " 0%, #f8f9fa 100%) !important;
+            border-bottom: 3px solid ", theme$primary_color, " !important;
+            box-shadow: ", theme$shadow_medium, " !important;
         }
 
         .main-header .navbar {
-            background-color: ", theme$background_white, " !important;
+            background: transparent !important;
         }
 
         .main-header .logo {
-            background-color: ", theme$background_white, " !important;
+            background: transparent !important;
             color: ", theme$text_primary, " !important;
             font-family: ", theme$font_family_primary, ";
             font-weight: bold;
             font-size: ", theme$font_size_h3, ";
-            border-right: 1px solid ", theme$border_light, ";
+            border-right: none;
         }
 
         .main-header .logo:hover {
-            background-color: ", theme$background_light, " !important;
+            background: rgba(220, 20, 60, 0.05) !important;
         }
 
-        /* === ENHANCED HEADER STYLING === */
+        /* === ENHANCED HEADER LAYOUT === */
         .main-header {
-            height: 50px !important;
-            min-height: 50px !important;
-            max-height: 50px !important;
+            height: 60px !important;
+            min-height: 60px !important;
+            max-height: 60px !important;
+            position: relative !important;
         }
         
         .main-header .navbar {
-            height: 50px !important;
-            min-height: 50px !important;
+            height: 60px !important;
+            min-height: 60px !important;
         }
         
-        /* Fix hamburger menu height and positioning */
-        .main-header .sidebar-toggle {
-            height: 50px !important;
-            width: 50px !important;
-            padding: 12px 15px !important;
-            line-height: 26px !important;
-            font-size: 18px !important;
-        }
-        
-        /* Hide or minimize the sidebar toggle if not needed */
+        /* Completely remove sidebar toggle */
         .main-header .sidebar-toggle {
             display: none !important;
+            width: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        
+        /* Style the logo area properly */
+        .main-header .logo {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            height: 60px !important;
+            line-height: 60px !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .main-header .logo:hover {
+            background: rgba(220, 20, 60, 0.05) !important;
         }
         
         /* Fix navbar content positioning */
         .main-header .navbar-custom-menu {
-            height: 50px !important;
-            float: right !important;
-        }
-        
-        .custom-header-container {
-            background-color: ", theme$background_white, " !important;
-            width: 100% !important;
+            height: 60px !important;
             margin: 0 !important;
             padding: 0 !important;
-            height: 50px !important;
-            line-height: 50px !important;
-            justify-content: flex-start !important;
         }
         
-        .header-logo-section {
-            height: 50px !important;
-            display: flex !important;
-            align-items: center !important;
-            flex-shrink: 0 !important;
+        .main-header .navbar-nav {
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 60px !important;
         }
         
-        .header-center-section {
-            height: 50px !important;
+        .main-header .navbar-nav > li {
+            height: 60px !important;
             display: flex !important;
             align-items: center !important;
+        }
+        
+        /* === HEADER CENTER CONTENT STYLING === */
+        .header-center-content {
+            display: flex !important;
+            align-items: center !important;
+            gap: 30px !important;
+            height: 60px !important;
             margin-left: 20px !important;
-            gap: 15px !important;
-            flex-grow: 0 !important;
+        }
+        
+        .header-title {
+            font-family: ", theme$font_family_primary, ";
+            background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: none !important;
+            margin: 0 !important;
+            line-height: 1.2 !important;
+            font-weight: 700 !important;
+            font-size: 24px !important;
+            letter-spacing: -0.8px !important;
         }
         
         .header-title {
@@ -185,50 +216,101 @@ generate_app_css <- function(theme) {
             line-height: 1.2 !important;
         }
         
-        /* === ENHANCED MODE SELECTOR STYLING === */
-        .enhanced-mode-selector {
+        /* === MODERN MODE SELECTOR STYLING === */
+        .compact-mode-selector {
             z-index: 1000;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 4px;
+            border: 1px solid rgba(220, 20, 60, 0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
-        .mode-button {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            transform: translateY(0) !important;
-            position: relative !important;
-            overflow: hidden !important;
+        .compact-mode-selector .shiny-input-radiogroup {
+            margin: 0;
         }
         
-        .mode-button:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+        .compact-mode-selector .radio {
+            margin: 0 2px 0 0;
+            display: inline-block;
         }
         
-        .mode-button:active {
-            transform: translateY(0) !important;
-            transition: all 0.1s ease !important;
+        .compact-mode-selector .radio:last-child {
+            margin-right: 0;
         }
         
-        .mode-target-btn.active,
-        .mode-target-btn:focus {
-            box-shadow: 0 6px 20px rgba(220, 20, 60, 0.4) !important;
-            outline: none !important;
+        .compact-mode-selector .radio input[type=\"radio\"] {
+            display: none; /* Hide actual radio buttons */
         }
         
-        .mode-explorer-btn.active {
-            background: linear-gradient(135deg, ", theme$info_color, ", #1976D2) !important;
-            color: white !important;
-            border-color: ", theme$info_color, " !important;
-            box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3) !important;
+        .compact-mode-selector .radio label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            margin: 0;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            background: transparent;
+            color: ", theme$text_secondary, ";
+            min-height: 40px;
+            min-width: 120px;
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
         }
         
-        .mode-explorer-btn:hover {
-            background: ", theme$background_white, " !important;
-            border-color: ", theme$primary_color, " !important;
-            color: ", theme$primary_color, " !important;
+        .compact-mode-selector .radio label::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: -1;
         }
         
-        .mode-explorer-btn.active:hover {
-            background: linear-gradient(135deg, ", theme$info_color, ", #1565C0) !important;
-            color: white !important;
+        .compact-mode-selector .radio label:hover {
+            color: ", theme$primary_color, ";
+            transform: translateY(-1px);
+        }
+        
+        .compact-mode-selector .radio label:hover::before {
+            left: 0;
+            opacity: 0.1;
+        }
+        
+        .compact-mode-selector .radio input[type=\"radio\"]:checked + span {
+            background: linear-gradient(135deg, ", theme$primary_color, ", ", theme$secondary_color, ");
+            color: white;
+            box-shadow: 0 4px 12px rgba(220, 20, 60, 0.3);
+            transform: translateY(-1px);
+            font-weight: 700;
+        }
+        
+        .compact-mode-selector .radio input[type=\"radio\"]:checked + span::before {
+            left: 0;
+            opacity: 1;
+        }
+        
+        /* Add icon content */
+        .compact-mode-selector .radio:first-child label::after {
+            content: '🎯';
+            margin-left: 8px;
+            font-size: 14px;
+        }
+        
+        .compact-mode-selector .radio:nth-child(2) label::after {
+            content: '🔬';
+            margin-left: 8px;
+            font-size: 14px;
         }
 
         /* === MODE SELECTOR STYLING (Legacy) === */
@@ -259,7 +341,7 @@ generate_app_css <- function(theme) {
             background-color: ", theme$background_light, " !important;
         }
         
-        .mode-selector-container input[type='radio']:checked + span {
+        .mode-selector-container input[type=\"radio\"]:checked + span {
             color: ", theme$primary_color, " !important;
             font-weight: bold;
         }
@@ -289,7 +371,7 @@ generate_app_css <- function(theme) {
             font-size: 11px;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: background-color 0.15s ease;
             text-align: center;
             width: 100%;
             max-width: 100%;
@@ -301,8 +383,8 @@ generate_app_css <- function(theme) {
         }
         
         .cell-type-toggle-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: ", theme$background_white, ";
+            border-color: ", theme$primary_color, ";
         }
         
         .cell-type-toggle-btn.active {
@@ -320,8 +402,8 @@ generate_app_css <- function(theme) {
         }
         
         .cell-type-toggle-section {
-            margin-bottom: 16px;
-            padding: 16px;
+            margin-bottom: 12px;
+            padding: 8px 12px;
             border-radius: 6px;
             background-color: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
@@ -400,11 +482,115 @@ generate_app_css <- function(theme) {
             color: ", theme$text_primary, " !important;
             max-width: 100%;
             box-sizing: border-box;
+            min-height: 38px !important;
         }
         
         .sidebar .selectize-input.focus {
             border-color: ", theme$primary_color, " !important;
             box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25) !important;
+        }
+        
+        /* === ENHANCED SELECTIZE STYLING === */
+        .selectize-input {
+            background: ", theme$background_white, " !important;
+            border: 2px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_md, " !important;
+            color: ", theme$text_primary, " !important;
+            font-size: ", theme$font_size_body, " !important;
+            line-height: 1.5 !important;
+            padding: 8px 12px !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .selectize-input input {
+            color: ", theme$text_primary, " !important;
+        }
+        
+        .selectize-input.dropdown-active {
+            border-color: ", theme$primary_color, " !important;
+        }
+        
+        .selectize-input:focus,
+        .selectize-input.focus {
+            border-color: ", theme$primary_color, " !important;
+            box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.1) !important;
+            outline: none !important;
+        }
+        
+        .selectize-input.has-items {
+            padding: 4px 12px !important;
+        }
+        
+        .selectize-control.multi .selectize-input > div {
+            background: ", theme$primary_color, " !important;
+            color: white !important;
+            border: none !important;
+            border-radius: ", theme$radius_sm, " !important;
+            padding: 4px 8px !important;
+            margin: 2px 4px 2px 0 !important;
+            font-size: ", theme$font_size_small, " !important;
+            font-weight: 500 !important;
+        }
+        
+        .selectize-control.multi .selectize-input > div .remove {
+            color: rgba(255, 255, 255, 0.8) !important;
+            border-left: 1px solid rgba(255, 255, 255, 0.3) !important;
+            margin-left: 6px !important;
+            padding-left: 6px !important;
+        }
+        
+        .selectize-control.multi .selectize-input > div .remove:hover {
+            color: white !important;
+            background: rgba(0, 0, 0, 0.1) !important;
+        }
+        
+        .selectize-dropdown {
+            background: ", theme$background_white, " !important;
+            border: 1px solid ", theme$border_medium, " !important;
+            border-radius: ", theme$radius_md, " !important;
+            box-shadow: ", theme$shadow_medium, " !important;
+            z-index: 9999 !important;
+            position: absolute !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .selectize-dropdown-content {
+            max-height: 200px !important;
+            overflow-y: auto !important;
+        }
+        
+        .selectize-dropdown .option {
+            padding: 8px 12px !important;
+            font-size: ", theme$font_size_body, " !important;
+            color: ", theme$text_primary, " !important;
+            background: ", theme$background_white, " !important;
+            border-bottom: 1px solid ", theme$border_light, " !important;
+            transition: background-color 0.15s ease !important;
+            cursor: pointer !important;
+        }
+        
+        .selectize-dropdown .option:last-child {
+            border-bottom: none !important;
+        }
+        
+        .selectize-dropdown .option:hover,
+        .selectize-dropdown .option.active {
+            background: ", theme$background_light, " !important;
+            color: ", theme$text_primary, " !important;
+        }
+        
+        .selectize-dropdown .option.selected {
+            background: rgba(220, 20, 60, 0.1) !important;
+            color: ", theme$primary_color, " !important;
+            font-weight: 500 !important;
+        }
+        
+        .selectize-dropdown .no-results {
+            padding: 12px !important;
+            color: ", theme$text_light, " !important;
+            font-style: italic !important;
+            text-align: center !important;
         }
         
         .sidebar .radio {
@@ -465,7 +651,7 @@ generate_app_css <- function(theme) {
         .sidebar .btn {
             border-radius: ", theme$radius_sm, " !important;
             font-weight: 500 !important;
-            transition: all 0.2s ease !important;
+            transition: background-color 0.15s ease !important;
         }
         
         .sidebar .btn-outline-primary {
@@ -571,7 +757,7 @@ generate_app_css <- function(theme) {
             border-color: ", theme$secondary_color, " !important;
         }
 
-        /* === LOGO STYLING === */
+        /* === ENHANCED LOGO STYLING === */
         .logo-container {
             display: flex;
             align-items: center;
@@ -583,11 +769,13 @@ generate_app_css <- function(theme) {
             max-height: 50px;
             max-width: 150px;
             cursor: pointer;
-            transition: opacity 0.2s ease;
+            transition: all 0.3s ease;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
         }
 
         .logo-primary:hover {
-            opacity: 0.8;
+            transform: scale(1.05);
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
         }
 
         .logo-link {
@@ -595,6 +783,7 @@ generate_app_css <- function(theme) {
             display: flex;
             align-items: center;
             gap: ", theme$spacing_md, ";
+            transition: all 0.2s ease;
         }
 
         .logo-link:hover {
@@ -755,6 +944,40 @@ generate_app_css <- function(theme) {
             .progress-container {
                 width: 250px;
             }
+            
+            .custom-header-container {
+                padding: 0 10px !important;
+                height: 50px !important;
+            }
+            
+            .header-center-section {
+                margin-left: 15px !important;
+                gap: 15px !important;
+            }
+            
+            .header-title {
+                font-size: 20px !important;
+            }
+            
+            .compact-mode-selector .radio label {
+                padding: 8px 12px !important;
+                font-size: 12px !important;
+                min-width: 90px !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .custom-header-container {
+                flex-direction: column !important;
+                height: auto !important;
+                padding: 10px !important;
+            }
+            
+            .header-center-section {
+                margin-left: 0 !important;
+                gap: 10px !important;
+                flex-direction: column !important;
+            }
         }
     "))
 }
@@ -802,49 +1025,7 @@ generate_app_javascript <- function() {
         
         <script>
         $(document).ready(function() {
-            
-            // Enhanced Mode Selector Logic
-            var currentMode = 'target';
-            
-            function updateModeButtons(mode) {
-                // Remove active class from all mode buttons
-                $('.mode-target-btn, .mode-explorer-btn').removeClass('active');
-                
-                if (mode === 'target') {
-                    $('.mode-target-btn').addClass('active');
-                    // Update the hidden radio button
-                    $('input[name=\"app_mode\"][value=\"target\"]').prop('checked', true);
-                } else if (mode === 'explorer') {
-                    $('.mode-explorer-btn').addClass('active');
-                    // Update the hidden radio button
-                    $('input[name=\"app_mode\"][value=\"explorer\"]').prop('checked', true);
-                }
-                currentMode = mode;
-                console.log('Mode updated to:', mode); // Debug log
-            }
-            
-            // Initialize mode selector
-            updateModeButtons('target');
-            
-            // Handle mode button clicks
-            $(document).on('click', '#mode_target', function(e) {
-                e.preventDefault();
-                console.log('Target mode clicked'); // Debug log
-                updateModeButtons('target');
-            });
-            
-            $(document).on('click', '#mode_explorer', function(e) {
-                e.preventDefault();
-                console.log('Explorer mode clicked'); // Debug log
-                updateModeButtons('explorer');
-            });
-            
-            // Listen for Shiny input changes and update visual state accordingly
-            $(document).on('shiny:inputchanged', function(event) {
-                if (event.name === 'app_mode') {
-                    updateModeButtons(event.value);
-                }
-            });
+            console.log('Anatomic Atlas loaded successfully');
         });
         
         // Auto-scroll coexpression log to bottom when updated

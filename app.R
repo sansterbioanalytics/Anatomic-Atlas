@@ -247,24 +247,39 @@ server <- function(input, output, session) {
             }
         }
 
-        # Update gene choices
+        # Update gene choices - server-side selectize for large datasets (90k+ genes)
         if (!is.null(values$expression_data)) {
-            genes <- unique(values$expression_data$gene)
+            genes <- sort(unique(values$expression_data$gene))  # Sort genes alphabetically
+            cat("Found", length(genes), "genes in dataset\n")
             # Set default to "SCN11A" if present, otherwise NULL
             default_gene <- if ("SCN11A" %in% genes) "SCN11A" else NULL
+            cat("Default gene set to:", default_gene, "\n")
             
-            # Update gene choices for both modes
+            # Server-side selectize - properly configured for large datasets
             updateSelectizeInput(session, "selected_genes",
                 choices = genes,
                 selected = default_gene,
-                server = TRUE
+                server = TRUE,  # Essential for large datasets
+                options = list(
+                    placeholder = "Type to search for genes...",
+                    maxOptions = 100,  # Limit results shown
+                    searchConjunction = "and"  # Better search matching
+                )
             )
             
             updateSelectizeInput(session, "target_gene_input",
                 choices = genes,
                 selected = default_gene,
-                server = TRUE
+                server = TRUE,  # Essential for large datasets
+                options = list(
+                    placeholder = "Type to search for genes...",
+                    maxOptions = 100,  # Limit results shown
+                    searchConjunction = "and"  # Better search matching
+                )
             )
+            cat("Gene choices updated for both inputs (server-side)\n")
+        } else {
+            cat("Expression data is NULL - gene choices not updated\n")
         }
 
         # Update gene set choices
@@ -1456,23 +1471,66 @@ server <- function(input, output, session) {
                 ))
         }
 
-        # Join and filter for selected genes and data type
+        # Get enabled cell types for target mode filtering
+        enabled_types <- if (values$app_mode == "target") {
+            active_cell_types()
+        } else {
+            NULL
+        }
+        
+        # Filter sample data by enabled cell types first if in target mode
+        filtered_sample_data <- if (!is.null(enabled_types) && length(enabled_types) > 0) {
+            values$sample_data %>% filter(!!sym(celltype_col) %in% enabled_types)
+        } else {
+            values$sample_data
+        }
+
+        # Join and filter for selected genes and data type using filtered samples
         plot_data <- values$expression_data %>%
             filter(
                 gene %in% selected_genes,
                 data_type == input$data_type
             ) %>%
             left_join(
-                values$sample_data %>%
+                filtered_sample_data %>%
                     select(all_of(c(sample_col, celltype_col))) %>%
                     rename(sample = !!sample_col, celltype = !!celltype_col),
                 by = "sample"
-            )
+            ) %>%
+            filter(!is.na(celltype))
 
-        # Calculate mean expression by group (celltype)
+        if (nrow(plot_data) == 0) {
+            return(plotly_empty(type = "scatter", mode = "markers") %>%
+                add_annotations(
+                    text = "No expression data available for selected cell types",
+                    showarrow = FALSE
+                ))
+        }
+
+        # Define product categories for color coding
+        real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+        hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
+        primary_products <- c("hDRG", "hMelo_1", "hSCP")
+
+        # Calculate mean expression by group (celltype) with category information
         group_means <- plot_data %>%
             group_by(celltype) %>%
             summarise(mean_expression = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+            mutate(
+                product_category = case_when(
+                    celltype %in% real_products ~ "Real* Products",
+                    celltype %in% hipsc_products ~ "Human iPSC",
+                    celltype %in% primary_products ~ "Primary Cells",
+                    TRUE ~ "Other"
+                ),
+                # Assign colors based on category
+                bar_color = case_when(
+                    product_category == "Real* Products" ~ "#DC143C",
+                    product_category == "Human iPSC" ~ "#FF8C00", 
+                    product_category == "Primary Cells" ~ "#228B22",
+                    TRUE ~ "#808080"
+                )
+            ) %>%
             arrange(desc(mean_expression))
 
         # Calculate individual gene means by group for points overlay
@@ -1490,19 +1548,26 @@ server <- function(input, output, session) {
         # Create y-axis label
         y_label <- if (input$data_type == "log2_cpm") "Mean log2(CPM + 1)" else "Mean VST"
 
-        # Create the base bar plot
+        # Create the base bar plot with category-based colors
         p <- plot_ly() %>%
             add_bars(
-                x = group_means$mean_expression,
-                y = reorder(group_means$celltype, group_means$mean_expression),
+                data = group_means,
+                x = ~mean_expression,
+                y = ~reorder(celltype, mean_expression),
                 orientation = 'h',
                 name = "Group Average",
-                marker = list(color = app_theme$primary_color, opacity = 0.7),
+                marker = list(
+                    color = ~bar_color,
+                    opacity = 0.8,
+                    line = list(color = "white", width = 1)
+                ),
                 hovertemplate = paste0(
                     "<b>Group:</b> %{y}<br>",
+                    "<b>Category:</b> %{customdata}<br>",
                     "<b>", y_label, ":</b> %{x:.3f}<br>",
                     "<extra></extra>"
-                )
+                ),
+                customdata = ~product_category
             ) %>%
             add_markers(
                 data = gene_means,
@@ -1510,9 +1575,10 @@ server <- function(input, output, session) {
                 y = ~celltype,
                 name = "Individual Genes",
                 marker = list(
-                    color = app_theme$text_secondary,
+                    color = "#666666",
                     size = 6,
-                    opacity = 0.8
+                    opacity = 0.7,
+                    symbol = "diamond"
                 ),
                 hovertemplate = paste0(
                     "<b>Gene:</b> %{text}<br>",
@@ -1629,57 +1695,75 @@ server <- function(input, output, session) {
         # Apply the safe column names
         colnames(expression_subset) <- safe_colnames
 
-        # Create DT with formatting and error handling
+        # Create DT with comprehensive error handling and warning suppression
         suppressWarnings({
-            tryCatch({
-                dt <- DT::datatable(
-                    expression_subset,
-                    options = list(
-                        pageLength = 25,
-                        scrollX = TRUE,
-                        scrollY = "600px",
-                        scrollCollapse = TRUE,
-                        dom = "Bfrtip",
-                        buttons = c("copy", "csv", "excel"),
-                        columnDefs = list(
-                            list(className = "dt-center", targets = "_all"),
-                            list(width = "120px", targets = c(0, 1)) # Fixed width for Sample and Group columns
-                        )
-                    ),
-                    rownames = FALSE,
-                    class = "compact stripe hover",
-                    extensions = "Buttons"
-                )
-                
-                # Only apply formatStyle if 'Group' column exists and we're in explorer mode
-                if ("Group" %in% colnames(expression_subset) && values$app_mode == "explorer" && 
-                    !is.null(input$group1) && !is.null(input$group2)) {
-                    # Additional safety check to ensure the groups exist in the data
-                    group_values <- unique(expression_subset$Group)
-                    if (input$group1 %in% group_values && input$group2 %in% group_values) {
-                        dt <- dt %>% DT::formatStyle(
-                            "Group",
-                            backgroundColor = DT::styleEqual(
-                                c(input$group1, input$group2),
-                                c(
+            suppressMessages({
+                tryCatch({
+                    # Ensure data is properly formatted for DT
+                    safe_data <- expression_subset
+                    
+                    # Validate column structure
+                    if (ncol(safe_data) < 2) {
+                        stop("Insufficient columns in data")
+                    }
+                    
+                    dt <- DT::datatable(
+                        safe_data,
+                        options = list(
+                            pageLength = 25,
+                            scrollX = TRUE,
+                            scrollY = "600px",
+                            scrollCollapse = TRUE,
+                            dom = "Bfrtip",
+                            buttons = c("copy", "csv", "excel"),
+                            columnDefs = list(
+                                list(className = "dt-center", targets = "_all"),
+                                list(width = "120px", targets = c(0, 1))
+                            ),
+                            language = list(emptyTable = "No gene data available for selected criteria")
+                        ),
+                        rownames = FALSE,
+                        class = "compact stripe hover",
+                        extensions = "Buttons"
+                    )
+                    
+                    # Apply conditional formatting only in explorer mode with valid inputs
+                    if (values$app_mode == "explorer" && "Group" %in% colnames(safe_data) && 
+                        !is.null(input$group1) && !is.null(input$group2) &&
+                        input$group1 != "" && input$group2 != "") {
+                        
+                        group_values <- unique(safe_data$Group)
+                        valid_groups <- c(input$group1, input$group2)
+                        existing_groups <- valid_groups[valid_groups %in% group_values]
+                        
+                        if (length(existing_groups) >= 2) {
+                            tryCatch({
+                                colors <- c(
                                     paste0("rgba(", paste(col2rgb(app_theme$plot_group1), collapse = ","), ",0.1)"),
                                     paste0("rgba(", paste(col2rgb(app_theme$plot_group2), collapse = ","), ",0.1)")
                                 )
-                            )
-                        )
+                                
+                                dt <- dt %>% DT::formatStyle(
+                                    "Group",
+                                    backgroundColor = DT::styleEqual(existing_groups, colors[1:length(existing_groups)])
+                                )
+                            }, error = function(format_error) {
+                                # Silently continue without formatting if it fails
+                                NULL
+                            })
+                        }
                     }
-                }
-                dt
-            }, error = function(e) {
-                # Silently log the error but don't show warning to user
-                message("DataTable creation failed: ", e$message)
-                # Return a basic table without formatting
-                return(DT::datatable(
-                    expression_subset,
-                    options = list(pageLength = 25, scrollX = TRUE, dom = "tip"),
-                    rownames = FALSE,
-                    class = "compact stripe hover"
-                ))
+                    dt
+                }, error = function(e) {
+                    # Return minimal table on any error
+                    basic_data <- if (nrow(expression_subset) > 0) expression_subset else data.frame(Message = "No data available")
+                    return(DT::datatable(
+                        basic_data,
+                        options = list(pageLength = 25, scrollX = TRUE, dom = "tip"),
+                        rownames = FALSE,
+                        class = "compact stripe hover"
+                    ))
+                })
             })
         })
     })
@@ -1787,43 +1871,175 @@ server <- function(input, output, session) {
     
     # Portfolio ranking plot for target mode
     output$portfolio_ranking_plot <- renderPlotly({
-        # Placeholder implementation - will be enhanced in later phases
-        plotly_empty() %>%
-            layout(
-                title = "Portfolio Expression Ranking",
-                annotations = list(
-                    text = "Portfolio ranking visualization<br>Coming in Phase 4",
-                    x = 0.5, y = 0.5,
-                    showarrow = FALSE,
-                    font = list(size = 16)
-                )
-            )
+        req(values$expression_data, values$sample_data, input$data_type)
+        
+        # Use unified gene selection (target mode uses target_gene_input)
+        selected_genes <- if (values$app_mode == "target") {
+            input$target_gene_input
+        } else {
+            current_genes()
+        }
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
+            return(create_empty_plot("Select genes to display portfolio ranking", 
+                                   get_plot_theme(app_theme)))
+        }
+        
+        # Get active cell types for filtering in target mode
+        enabled_types <- if (values$app_mode == "target") {
+            active_cell_types()
+        } else {
+            NULL
+        }
+        
+        # Create portfolio ranking plot using the new function
+        plot <- create_portfolio_ranking_plot(
+            expression_data = values$expression_data,
+            sample_data = values$sample_data,
+            selected_genes = selected_genes,
+            data_type = input$data_type,
+            plot_theme = list(
+                primary_color = app_theme$primary_color,
+                text_secondary = app_theme$text_secondary,
+                background = app_theme$background_white,
+                text_color = app_theme$text_primary
+            ),
+            enabled_cell_types = enabled_types
+        )
+        
+        return(plot)
     })
     
     # Portfolio summary table for target mode
     output$portfolio_summary_table <- DT::renderDataTable({
-        # Placeholder implementation
-        data.frame(
-            Product = c("Product 1", "Product 2", "Product 3"),
-            Expression = c("High", "Medium", "Low"),
-            Ranking = c(1, 2, 3),
-            Note = c("Placeholder data", "Placeholder data", "Placeholder data")
+        req(values$expression_data, values$sample_data, input$data_type)
+        
+        # Use unified gene selection (target mode uses target_gene_input)
+        selected_genes <- if (values$app_mode == "target") {
+            input$target_gene_input
+        } else {
+            current_genes()
+        }
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
+            return(data.frame(Message = "Select genes to display portfolio summary"))
+        }
+        
+        # Get active cell types for filtering in target mode
+        enabled_types <- if (values$app_mode == "target") {
+            active_cell_types()
+        } else {
+            NULL
+        }
+        
+        # Create portfolio summary table using the new function
+        table_data <- create_portfolio_summary_table(
+            expression_data = values$expression_data,
+            sample_data = values$sample_data,
+            selected_genes = selected_genes,
+            data_type = input$data_type,
+            enabled_cell_types = enabled_types
         )
-    }, options = list(dom = "t"), rownames = FALSE)
+        
+        # Create and return formatted DT table
+        dt <- DT::datatable(
+            table_data,
+            options = list(
+                dom = "t",
+                pageLength = 15,
+                scrollY = "300px",
+                scrollCollapse = TRUE,
+                ordering = TRUE,
+                order = list(list(2, "asc")),  # Order by ranking column
+                columnDefs = list(
+                    list(targets = c(0, 1), className = "dt-left"),      # Left align Product and Category
+                    list(targets = c(2, 3), className = "dt-center"),    # Center align Ranking and Expression Level
+                    list(targets = c(4, 5, 6, 7), className = "dt-right") # Right align numeric columns
+                )
+            ),
+            rownames = FALSE
+        )
+        
+        # Apply formatting if we have the proper columns
+        if ("Product" %in% colnames(table_data)) {
+            dt <- dt %>%
+                DT::formatStyle(
+                    "Product",
+                    fontWeight = "bold",
+                    color = "#2C3E50"
+                )
+        }
+        
+        if ("Category" %in% colnames(table_data)) {
+            dt <- dt %>%
+                DT::formatStyle(
+                    "Category",
+                    backgroundColor = DT::styleEqual(
+                        c("Real* Products", "Human iPSC", "Primary Cells", "Other"),
+                        c("rgba(220, 20, 60, 0.1)", "rgba(255, 140, 0, 0.1)", "rgba(34, 139, 34, 0.1)", "rgba(128, 128, 128, 0.1)")
+                    ),
+                    fontWeight = "bold"
+                )
+        }
+        
+        if ("Level" %in% colnames(table_data)) {
+            dt <- dt %>%
+                DT::formatStyle(
+                    "Level",
+                    backgroundColor = DT::styleEqual(
+                        c("Very High", "High", "Medium", "Low", "Very Low"),
+                        c("#d4edda", "#d1ecf1", "#fff3cd", "#f8d7da", "#f5f5f5")
+                    ),
+                    fontWeight = "500"
+                )
+        }
+        
+        # Apply numeric formatting if we have numeric columns
+        if (ncol(table_data) >= 8) {
+            dt <- dt %>%
+                DT::formatRound(columns = c(6, 7, 8), digits = 3)
+        }
+        
+        return(dt)
+    })
     
     # Target gene heatmap for target mode
     output$target_gene_heatmap <- renderPlotly({
-        # Placeholder implementation - will be enhanced in later phases
-        plotly_empty() %>%
-            layout(
-                title = "Gene Heatmap: Genes (X) vs Products (Y)",
-                annotations = list(
-                    text = "Gene heatmap visualization<br>Coming in Phase 4",
-                    x = 0.5, y = 0.5,
-                    showarrow = FALSE,
-                    font = list(size = 16)
-                )
-            )
+        req(values$expression_data, values$sample_data, input$data_type)
+        
+        # Use unified gene selection (target mode uses target_gene_input)
+        selected_genes <- if (values$app_mode == "target") {
+            input$target_gene_input
+        } else {
+            current_genes()
+        }
+        
+        if (is.null(selected_genes) || length(selected_genes) == 0) {
+            return(create_empty_plot("Select genes to display target heatmap", 
+                                   get_plot_theme(app_theme)))
+        }
+        
+        # Get active cell types for filtering in target mode
+        enabled_types <- if (values$app_mode == "target") {
+            active_cell_types()
+        } else {
+            NULL
+        }
+        
+        # Create target heatmap using the new function
+        plot <- create_target_heatmap(
+            expression_data = values$expression_data,
+            sample_data = values$sample_data,
+            selected_genes = selected_genes,
+            data_type = input$data_type,
+            plot_theme = list(
+                background = app_theme$background_white,
+                text_color = app_theme$text_primary
+            ),
+            enabled_cell_types = enabled_types
+        )
+        
+        return(plot)
     })
     
     # =============================================================================
