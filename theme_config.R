@@ -925,6 +925,44 @@ generate_app_css <- function(theme) {
             border-bottom: 2px solid ", theme$border_medium, " !important;
         }
 
+        /* === TAB STYLING === */  
+        .nav-tabs {
+            border-bottom: 1px solid ", theme$border_medium, " !important;
+        }
+        
+        .nav-tabs > li > a {
+            padding: 10px 20px !important; /* Increased left/right padding */
+            margin-right: 2px !important;
+            border-radius: ", theme$radius_sm, " ", theme$radius_sm, " 0 0 !important;
+            color: ", theme$text_secondary, " !important;
+            background-color: ", theme$background_light, " !important;
+            border: 1px solid ", theme$border_light, " !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .nav-tabs > li > a:hover {
+            background-color: ", theme$background_white, " !important;
+            color: ", theme$primary_color, " !important;
+            border-color: ", theme$border_medium, " !important;
+        }
+        
+        .nav-tabs > li.active > a,
+        .nav-tabs > li.active > a:hover,
+        .nav-tabs > li.active > a:focus {
+            background-color: ", theme$primary_color, " !important;
+            color: ", theme$text_white, " !important;
+            border-color: ", theme$primary_color, " !important;
+            font-weight: bold !important;
+            padding: 10px 20px !important; /* Maintain increased padding for active tabs */
+        }
+        
+        .tab-content {
+            background-color: ", theme$background_white, " !important;
+            border: 1px solid ", theme$border_light, " !important;
+            border-top: none !important;
+            padding: 15px !important;
+        }
+
         .table-striped > tbody > tr:nth-of-type(odd) {
             background-color: ", theme$background_light, ";
         }

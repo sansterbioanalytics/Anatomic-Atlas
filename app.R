@@ -336,19 +336,45 @@ server <- function(input, output, session) {
         genes[genes != ""]  # Remove empty strings
     }
 
-    # Suggest similar genes for typos
+    # Suggest similar genes for invalid genes only (improved fuzzy matching)
     suggest_genes <- function(invalid_genes, available_genes, max_suggestions = 10) {
         if (length(invalid_genes) == 0 || length(available_genes) == 0) return(NULL)
         
         all_suggestions <- c()
         for (gene in invalid_genes) {
-            # Simple fuzzy matching - find genes that start with same letters
-            partial_matches <- available_genes[grepl(paste0("^", substr(gene, 1, min(3, nchar(gene)))), 
-                                                   available_genes, ignore.case = TRUE)]
-            if (length(partial_matches) > 0) {
-                # Add up to 3 suggestions per invalid gene, formatted as "invalid -> suggestion1, suggestion2"
-                suggestions_for_gene <- head(partial_matches, 3)
-                all_suggestions <- c(all_suggestions, paste0(gene, " → ", paste(suggestions_for_gene, collapse = ", ")))
+            # Only provide suggestions for invalid genes that user is actually typing
+            gene_suggestions <- c()
+            
+            # Method 1: Exact case-insensitive prefix matching (highest priority)
+            prefix_matches <- available_genes[grepl(paste0("^", gene), available_genes, ignore.case = TRUE)]
+            if (length(prefix_matches) > 0) {
+                gene_suggestions <- c(gene_suggestions, head(prefix_matches, 2))
+            }
+            
+            # Method 2: Contains the entered text (case-insensitive)
+            if (length(gene_suggestions) < 3 && nchar(gene) >= 2) {
+                contains_matches <- available_genes[grepl(gene, available_genes, ignore.case = TRUE)]
+                contains_matches <- setdiff(contains_matches, gene_suggestions)  # Remove duplicates
+                if (length(contains_matches) > 0) {
+                    gene_suggestions <- c(gene_suggestions, head(contains_matches, 3 - length(gene_suggestions)))
+                }
+            }
+            
+            # Method 3: Similar starting letters (fallback, minimum 3 characters)
+            if (length(gene_suggestions) < 3 && nchar(gene) >= 3) {
+                similar_start <- available_genes[grepl(paste0("^", substr(gene, 1, min(3, nchar(gene)))), 
+                                                     available_genes, ignore.case = TRUE)]
+                similar_start <- setdiff(similar_start, gene_suggestions)  # Remove duplicates
+                if (length(similar_start) > 0) {
+                    gene_suggestions <- c(gene_suggestions, head(similar_start, 3 - length(gene_suggestions)))
+                }
+            }
+            
+            # Format suggestions for this gene
+            if (length(gene_suggestions) > 0) {
+                # Limit to top 3 suggestions per invalid gene
+                top_suggestions <- head(gene_suggestions, 3)
+                all_suggestions <- c(all_suggestions, paste0(gene, " → ", paste(top_suggestions, collapse = ", ")))
             }
         }
         # Return up to max_suggestions total
@@ -357,23 +383,31 @@ server <- function(input, output, session) {
 
     # Unified gene validation output for both modes, with proper error handling
     output$gene_validation <- renderUI({       
-        # Ensure we have the required reactive inputs - add safe defaults
+        # Make reactive to input changes - DO NOT use isolate() here
         gene_source <- input$gene_set_selection %||% "Custom Genes"
         genes_entered <- NULL
         validation_label <- NULL
         
-        if (gene_source == "Custom Genes") {
-            genes_entered <- parse_gene_input(input$gene_textarea)
-            validation_label <- "Custom gene input"
-        } else if (gene_source == "Uploaded Gene Set") {
-            genes_entered <- values$uploaded_genes
-            validation_label <- "Uploaded gene set"
-        } else if (!is.null(gene_sets) && gene_source %in% names(gene_sets)) {
-            genes_entered <- gene_sets[[gene_source]]
-            validation_label <- paste("Predefined gene set:", gene_source)
-        }
+        # Safely get genes based on selection type
+        tryCatch({
+            if (gene_source == "Custom Genes") {
+                textarea_value <- input$gene_textarea %||% ""
+                genes_entered <- parse_gene_input(textarea_value)
+                validation_label <- "Custom gene input"
+            } else if (gene_source == "Uploaded Gene Set") {
+                genes_entered <- values$uploaded_genes
+                validation_label <- "Uploaded gene set"
+            } else if (!is.null(gene_sets) && gene_source %in% names(gene_sets)) {
+                genes_entered <- gene_sets[[gene_source]]
+                validation_label <- paste("Predefined gene set:", gene_source)
+            }
+        }, error = function(e) {
+            cat("Error in gene validation input handling:", e$message, "\n")
+            genes_entered <<- NULL
+            validation_label <<- "Error loading genes"
+        })
         
-        cat("Genes entered length:", length(genes_entered), "\n")
+        cat("Genes entered length:", length(genes_entered), "Mode:", values$app_mode, "\n")
         
         # Show loading message if available genes not ready
         if (is.null(values$available_genes) || length(values$available_genes) == 0) {
@@ -388,25 +422,21 @@ server <- function(input, output, session) {
         if (is.null(genes_entered) || length(genes_entered) == 0) {
             return(div(
                 style = "color: #6c757d; font-style: italic; padding: 12px; font-size: 14px; width: 100%; background-color: rgba(108,117,125,0.1); border-radius: 4px; border: 1px solid rgba(108,117,125,0.2);",
-                "Enter or select gene symbols to see validation results..."
+                paste("Enter or select gene symbols to see validation results... (Mode:", values$app_mode, ")")
             ))
         }
         
-        # Perform validation
-        valid_genes <- intersect(genes_entered, values$available_genes)
-        invalid_genes <- setdiff(genes_entered, values$available_genes)
+        # Perform validation with error handling
+        tryCatch({
+            valid_genes <- intersect(genes_entered, values$available_genes)
+            invalid_genes <- setdiff(genes_entered, values$available_genes)
+            
+            # Note: Do NOT update values$validated_genes here - this is handled by the dedicated observer
+            # to avoid conflicts between renderUI and observer updating the same reactive value
         
-        # Store valid genes for downstream use (only for custom input)
-        if (gene_source == "Custom Genes") {
-            if (length(valid_genes) > 0) {
-                values$validated_genes <- valid_genes
-            } else {
-                values$validated_genes <- NULL
-            }
-        }
-        
-        # Create styled validation summary (responsive panel)
-        validation_div <- div(
+            
+            # Create styled validation summary (responsive panel)
+            validation_div <- div(
             style = "background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 16px; font-size: 14px; margin: 8px 0; color: #495057; width: 100%; box-sizing: border-box;",
             
             # Source label
@@ -446,20 +476,21 @@ server <- function(input, output, session) {
                         }
                     ),
                     
-                    # Suggestions section
+                    # Suggestions section - only show for invalid genes
                     {
-                        suggestions <- suggest_genes(head(invalid_genes, 5), values$available_genes, 10)
+                        # Only suggest for the invalid genes that the user actually typed
+                        suggestions <- suggest_genes(head(invalid_genes, 5), values$available_genes, 8)
                         if (length(suggestions) > 0) {
                             div(
                                 style = "margin-top: 6px;",
                                 div(
                                     style = "color: #17a2b8; font-weight: bold; margin-bottom: 4px;",
-                                    paste0("Suggestions (", length(suggestions), "):")
+                                    paste0("Suggestions for invalid genes (", length(suggestions), "):")
                                 ),
                                 div(
                                     style = "color: #495057; margin-left: 10px; font-style: italic; line-height: 1.3;",
                                     lapply(suggestions, function(s) {
-                                        div(style = "margin-bottom: 2px; word-wrap: break-word;", s)
+                                        div(style = "margin-bottom: 2px; word-wrap: break-word; font-size: 13px;", s)
                                     })
                                 )
                             )
@@ -470,24 +501,56 @@ server <- function(input, output, session) {
         )
         
         return(validation_div)
+        
+        }, error = function(e) {
+            cat("Error in validation div creation:", e$message, "\n")
+            # Return a simple error message if validation fails
+            return(div(
+                style = "color: #dc3545; padding: 12px; font-size: 14px; width: 100%; background-color: rgba(220,53,69,0.1); border-radius: 4px; border: 1px solid rgba(220,53,69,0.2);",
+                paste("Validation error:", e$message, "(Mode:", values$app_mode, ")")
+            ))
+        })
     })
 
-    # Explicit observer to handle gene textarea changes and update validated genes
+    # Explicit observer to handle gene selection changes and update validated genes (unified for all modes)
     observe({
-        req(input$gene_textarea)
-        req(values$available_genes)
+        # Force reactivity on mode changes
+        values$app_mode
         
-        # Only process if we're using custom genes
-        if (input$gene_set_selection == "Custom Genes") {
-            genes_entered <- parse_gene_input(input$gene_textarea)
-            
-            if (!is.null(genes_entered) && length(genes_entered) > 0) {
-                # Validate genes against available genes
-                valid_genes <- intersect(genes_entered, values$available_genes)
-                values$validated_genes <- if (length(valid_genes) > 0) valid_genes else NULL
-            } else {
-                values$validated_genes <- NULL
+        # Only proceed if we have available genes
+        if (is.null(values$available_genes) || length(values$available_genes) == 0) {
+            return()
+        }
+        
+        # Get current gene source with defensive handling
+        gene_source <- input$gene_set_selection %||% "Custom Genes"
+        genes_entered <- NULL
+        
+        # Determine genes based on selection type with error handling
+        tryCatch({
+            if (gene_source == "Custom Genes") {
+                if (!is.null(input$gene_textarea)) {
+                    genes_entered <- parse_gene_input(input$gene_textarea)
+                }
+            } else if (gene_source == "Uploaded Gene Set") {
+                genes_entered <- values$uploaded_genes
+            } else if (!is.null(gene_sets) && gene_source %in% names(gene_sets)) {
+                genes_entered <- gene_sets[[gene_source]]
             }
+        }, error = function(e) {
+            cat("Error in gene selection observer:", e$message, "\n")
+            genes_entered <<- NULL
+        })
+        
+        # Validate and update genes for all selection types
+        if (!is.null(genes_entered) && length(genes_entered) > 0) {
+            # Validate genes against available genes
+            valid_genes <- intersect(genes_entered, values$available_genes)
+            values$validated_genes <- if (length(valid_genes) > 0) valid_genes else NULL
+            cat("Observer updated validated genes:", length(valid_genes), "valid genes in", values$app_mode, "mode\n")
+        } else {
+            values$validated_genes <- NULL
+            cat("Observer cleared validated genes in", values$app_mode, "mode\n")
         }
     })
 
@@ -502,21 +565,8 @@ server <- function(input, output, session) {
 
     # Reactive expression for currently selected genes (unified across all plots)
     current_genes <- reactive({
-        # Unified gene selection logic for both modes
-        if (input$gene_set_selection == "Custom Genes") {
-            # Use validated genes from text area (both modes)
-            return(values$validated_genes)
-        } else if (input$gene_set_selection == "Uploaded Gene Set") {
-            # Use uploaded genes (both modes)
-            return(values$uploaded_genes)
-        } else {
-            # Using a predefined gene set (both modes)
-            if (!is.null(gene_sets) && input$gene_set_selection %in% names(gene_sets)) {
-                return(gene_sets[[input$gene_set_selection]])
-            } else {
-                return(NULL)
-            }
-        }
+        # Always use validated genes - the observer handles validation for all gene selection types
+        return(values$validated_genes)
     })
     
     # Reactive expression for genes on current page (for expression plots)
@@ -661,26 +711,6 @@ server <- function(input, output, session) {
             tags$strong(paste(length(genes), "genes selected")),
             br(),
             tags$em(paste("Source:", gene_source))
-        )
-    })
-
-    # Display target genes information (for target mode)
-    output$target_genes_display <- renderUI({
-        genes <- values$validated_genes
-        
-        if (is.null(genes) || length(genes) == 0) {
-            return(div(
-                style = paste0("color: ", app_theme$text_light, "; font-size: ", app_theme$font_size_small, ";"),
-                "No target genes selected"
-            ))
-        }
-        
-        div(
-            style = paste0("color: ", app_theme$text_white, "; font-size: ", app_theme$font_size_small, "; margin-bottom: ", app_theme$spacing_sm, ";"),
-            tags$strong(paste(length(genes), "target genes selected")),
-            br(),
-            tags$em(paste("Genes:", paste(head(genes, 10), collapse = ", "), 
-                         if(length(genes) > 10) "..." else ""))
         )
     })
     
@@ -882,35 +912,82 @@ server <- function(input, output, session) {
                 selected = "Uploaded Gene Set"
             )
             
-            showNotification(result$message, type = "success")
+            showNotification(result$message, type = "default")
         } else {
             showNotification(result$message, type = "error")
         }
     })
 
-    # Expression boxplot for selected genes, split into three groups
+    # Optimized expression boxplot with reduced reactive dependencies
     output$expression_histogram <- renderPlotly({
-        # Get pre-filtered contrast data
-        plot_data_base <- contrast_data()
-
-        if (is.null(plot_data_base)) {
-            return(plotly_empty(type = "scatter", mode = "markers") %>%
-                add_annotations(
-                    text = "Unable to load data for selected groups",
-                    showarrow = FALSE
-                ))
-        }
-
-        # Use current page genes for plotting (paginated)
+        # Direct reactive triggers instead of going through contrast_data
+        req(values$expression_data, values$sample_data, input$data_type)
+        
+        # Get genes to plot (paginated)
         genes_to_plot <- current_page_genes()
         
-        # Only plot if genes are selected
+        # Early return if no genes selected
         if (is.null(genes_to_plot) || length(genes_to_plot) == 0) {
             return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "Select genes to display expression plots",
                     showarrow = FALSE
                 ))
+        }
+
+        # Create plot data based on mode - optimized to only process needed genes
+        if (values$app_mode == "target") {
+            # Target mode: use toggle states
+            if (length(values$cell_type_toggles) == 0) {
+                return(plotly_empty(type = "scatter", mode = "markers") %>%
+                    add_annotations(
+                        text = "Select cell types to display expression plots",
+                        showarrow = FALSE
+                    ))
+            }
+            
+            # Get enabled cell types
+            enabled_cell_types <- names(values$cell_type_toggles)[sapply(values$cell_type_toggles, function(x) x == TRUE)]
+            if (length(enabled_cell_types) == 0) {
+                return(plotly_empty(type = "scatter", mode = "markers") %>%
+                    add_annotations(
+                        text = "Enable cell types to display expression plots",
+                        showarrow = FALSE
+                    ))
+            }
+            
+            # Optimized data filtering - only get data for selected genes and enabled cell types
+            celltype_col <- get_celltype_column(values$sample_data)
+            sample_col <- get_sample_column(values$sample_data)
+            
+            # Filter samples first (smaller dataset)
+            target_samples <- values$sample_data %>%
+                filter(!!sym(celltype_col) %in% enabled_cell_types) %>%
+                select(all_of(c(sample_col, celltype_col))) %>%
+                rename(sample = !!sample_col, celltype = !!celltype_col)
+            
+            # Then filter expression data for only needed genes and samples
+            plot_data <- values$expression_data %>%
+                filter(
+                    gene %in% genes_to_plot,  # Filter genes first
+                    sample %in% target_samples$sample,  # Then samples
+                    data_type == input$data_type  # Then data type
+                ) %>%
+                left_join(target_samples, by = "sample") %>%
+                mutate(violin_group = celltype)
+                
+        } else {
+            # Explorer mode: use group1/group2 logic - optimized
+            req(input$group1, input$group2)
+            
+            # Create optimized contrast data for only the needed genes
+            plot_data <- create_contrast_data(
+                values$expression_data %>% filter(gene %in% genes_to_plot),  # Pre-filter genes
+                values$sample_data,
+                input$group1,
+                input$group2,
+                input$data_type
+            )
         }
 
         # Create Y-axis label based on data type
@@ -920,12 +997,26 @@ server <- function(input, output, session) {
             "Expression Level (VST)"
         }
 
-        # Filter for selected genes from pre-filtered data
-        plot_data <- plot_data_base %>%
-            filter(gene %in% genes_to_plot)
+        # Create optimized subtitle
+        data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
+        all_selected_genes <- current_genes()
+        genes_per_page <- 10
+        
+        subtitle_parts <- paste0("Data: ", data_type_label)
+        
+        # Add pagination info if needed
+        if (!is.null(all_selected_genes) && length(all_selected_genes) > genes_per_page) {
+            total_genes <- length(all_selected_genes)
+            max_pages <- ceiling(total_genes / genes_per_page)
+            subtitle_parts <- paste(subtitle_parts, 
+                paste0("| Showing ", length(genes_to_plot), " of ", total_genes, " genes (Page ", values$gene_page, "/", max_pages, ")"))
+        }
+        
+        # Assign subtitle text for use in plot
+        subtitle_text <- subtitle_parts
 
-        # Check if we have data
-        if (nrow(plot_data) == 0) {
+        # Check if we have data after filtering
+        if (is.null(plot_data) || nrow(plot_data) == 0) {
             return(plotly_empty(type = "scatter", mode = "markers") %>%
                 add_annotations(
                     text = "No expression data available for selected genes",
@@ -933,70 +1024,33 @@ server <- function(input, output, session) {
                 ))
         }
 
-        # Create subtitle with data type information and pagination
-        data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-        all_selected_genes <- current_genes()
-        genes_per_page <- 10  # Fixed at 10 genes per page
-        
-        subtitle_parts <- c(
-            paste0("Data: ", data_type_label)
-        )
-        
-        # Add pagination info if we have multiple pages
-        if (!is.null(all_selected_genes) && length(all_selected_genes) > genes_per_page) {
-            total_genes <- length(all_selected_genes)
-            max_pages <- ceiling(total_genes / genes_per_page)
-            start_idx <- (values$gene_page - 1) * genes_per_page + 1
-            end_idx <- min(values$gene_page * genes_per_page, total_genes)
-            
-            subtitle_parts <- c(
-                subtitle_parts,
-                paste0("Showing ", length(genes_to_plot), " of ", total_genes, " genes (Page ", values$gene_page, "/", max_pages, ")")
-            )
-        } else if (!is.null(genes_to_plot)) {
-            subtitle_parts <- c(
-                subtitle_parts,
-                paste0("Genes: ", paste(genes_to_plot, collapse = ", "))
-            )
-        }
-        
-        subtitle_text <- paste(subtitle_parts, collapse = " | ")
-
-        # Create boxplot, faceted by gene
+        # Optimized plot creation
         plot_theme <- get_plot_theme(app_theme)
 
-        # Different handling for target mode vs explorer mode
+        # Color mapping based on mode
         if (values$app_mode == "target") {
-            # Target mode: use all available cell types in violin_group
-            # Get unique cell types for color mapping
             unique_groups <- unique(plot_data$violin_group)
             n_groups <- length(unique_groups)
             
-            # Use a larger color palette for target mode since we can have many cell types
-            colors_extended <- c(
-                plot_theme$colors,
-                RColorBrewer::brewer.pal(min(8, max(3, n_groups)), "Set2"),
-                RColorBrewer::brewer.pal(min(8, max(3, n_groups)), "Set3")
-            )
+            # Efficient color palette generation
+            if (n_groups <= 3) {
+                colors_used <- plot_theme$colors[1:n_groups]
+            } else {
+                colors_used <- c(
+                    plot_theme$colors,
+                    RColorBrewer::brewer.pal(min(8, max(3, n_groups - length(plot_theme$colors))), "Set2")
+                )[1:n_groups]
+            }
             
-            # Create color mapping for all groups
-            group_colors <- setNames(
-                colors_extended[1:n_groups],
-                unique_groups
-            )
-            
+            group_colors <- setNames(colors_used, unique_groups)
             plot_title <- "Expression Distribution in Target Mode"
         } else {
-            # Explorer mode: use the traditional group1/group2/Other mapping
-            group_colors <- setNames(
-                plot_theme$colors,
-                c(input$group1, input$group2, "Other")
-            )
-            
+            group_colors <- setNames(plot_theme$colors, c(input$group1, input$group2, "Other"))
             plot_title <- "Expression Distribution of Selected Genes"
         }
 
-        p <- ggplot(plot_data, aes(x = violin_group, y = expression, fill = violin_group, text = sample)) +
+        # Create plot with minimal processing
+        p <- ggplot(plot_data, aes(x = violin_group, y = expression, fill = violin_group, text = paste("Sample:", sample, "<br>Gene:", gene))) +
             geom_boxplot(alpha = 0.7, outlier.shape = NA) +
             {
                 if (input$show_points) {
@@ -2221,34 +2275,34 @@ server <- function(input, output, session) {
         paste(log_entries, collapse = "\n")
     })
     
-    # Summary table of found genes
-    output$coexpressed_genes_summary <- DT::renderDataTable({
-        results <- coexpression_results()
-        
-        if (is.null(results) || nrow(results$similar_genes) == 0) {
-            return(data.frame(Message = "No results"))
-        }
-        
-        summary_table <- results$similar_genes %>%
-            select(Gene = similar_gene, `Avg Corr` = avg_correlation) %>%
-            mutate(`Avg Corr` = round(`Avg Corr`, 3))
-        
-        suppressWarnings({
-            DT::datatable(
-                summary_table,
-                options = list(
-                    pageLength = 10,
-                    dom = "t",
-                    ordering = FALSE,
-                    scrollY = "200px",
-                    scrollCollapse = TRUE
-                ),
-                rownames = FALSE,
-                selection = "none"
-            ) %>%
-                DT::formatStyle("Gene", fontWeight = "bold")
-        })
-    })
+    # Summary table of found genes - REMOVED: Redundant Found Genes Summary
+    # output$coexpressed_genes_summary <- DT::renderDataTable({
+    #     results <- coexpression_results()
+    #     
+    #     if (is.null(results) || nrow(results$similar_genes) == 0) {
+    #         return(data.frame(Message = "No results"))
+    #     }
+    #     
+    #     summary_table <- results$similar_genes %>%
+    #         select(Gene = similar_gene, `Avg Corr` = avg_correlation) %>%
+    #         mutate(`Avg Corr` = round(`Avg Corr`, 3))
+    #     
+    #     suppressWarnings({
+    #         DT::datatable(
+    #             summary_table,
+    #             options = list(
+    #                 pageLength = 10,
+    #                 dom = "t",
+    #                 ordering = FALSE,
+    #                 scrollY = "200px",
+    #                 scrollCollapse = TRUE
+    #             ),
+    #             rownames = FALSE,
+    #             selection = "none"
+    #         ) %>%
+    #             DT::formatStyle("Gene", fontWeight = "bold")
+    #     })
+    # })
     
     # Co-expression heatmap
     output$coexpression_heatmap <- renderPlotly({

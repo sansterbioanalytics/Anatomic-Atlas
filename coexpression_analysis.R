@@ -1207,9 +1207,10 @@ create_coexpression_tab_ui <- function() {
                     br(),
                     
                     conditionalPanel(
-                        condition = "output.coexpression_status",
-                        h6("Found Genes", style = "font-weight: bold;"),
-                        DT::dataTableOutput("coexpressed_genes_summary", height = "200px")
+                        condition = "output.coexpression_status"
+                        # REMOVED: Redundant Found Genes Summary
+                        # h6("Found Genes", style = "font-weight: bold;"),
+                        # DT::dataTableOutput("coexpressed_genes_summary", height = "200px")
                     )
                 )
             ),
