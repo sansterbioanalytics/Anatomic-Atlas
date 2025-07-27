@@ -902,11 +902,13 @@ generate_app_css <- function(theme) {
         .dataTables_wrapper {
             font-size: ", theme$font_size_small, ";
             overflow-x: auto;
+            overflow-y: hidden;  /* Prevent vertical overflow from wrapper */
         }
         
         .dataTables_wrapper .dataTable {
             width: 100% !important;
             border-collapse: collapse;
+            table-layout: fixed;  /* Ensure fixed table layout for better control */
         }
         
         .dataTables_wrapper .dataTable th,
@@ -917,6 +919,19 @@ generate_app_css <- function(theme) {
             overflow: hidden;
             text-overflow: ellipsis;
             font-size: ", theme$font_size_small, " !important;
+            white-space: nowrap;  /* Prevent text wrapping to control height */
+        }
+        
+        /* Table container specific fixes */
+        .dataTables_wrapper .dataTables_scrollBody {
+            overflow-x: auto !important;
+            overflow-y: auto !important;
+            max-height: 400px !important;  /* Ensure scroll body doesn't exceed container */
+        }
+        
+        .dataTables_wrapper .dataTable.nowrap th,
+        .dataTables_wrapper .dataTable.nowrap td {
+            white-space: nowrap !important;
         }
         
         .dataTables_wrapper .dataTable th {

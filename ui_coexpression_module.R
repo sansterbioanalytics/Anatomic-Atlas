@@ -59,11 +59,14 @@ create_coexpression_analysis_box <- function() {
             tabPanel(
                 "Co-Expression Table",
                 div(
-                    style = "padding: 4px;", # Minimal padding
+                    style = "padding: 4px; height: 800px; overflow: hidden;", # Minimal padding with height control
                     helpText("Detailed correlation results for selected genes", 
                             class = "help-text",
                             style = "font-size: 11px; margin-bottom: 6px;"),
-                    DT::dataTableOutput("coexpression_table", height = "800px") %>% withSpinner()
+                    div(
+                        style = "height: calc(100% - 30px); overflow: hidden;",  # Container to properly contain the table
+                        DT::dataTableOutput("coexpression_table", height = "100%") %>% withSpinner()
+                    )
                 )
             )
         )
@@ -151,46 +154,67 @@ create_coexpression_controls <- function() {
     )
 }
 
-# Co-expression results panel (shared by both modes) - Redesigned without Found Genes Summary
+# Co-expression results panel (shared by both modes) - Redesigned without Found Genes Summary with full height
 create_coexpression_results <- function() {
-    tabsetPanel(
-        tabPanel(
-            "Co-expressed Genes",
-            div(
-                style = "padding: 8px;",
-                h6("Co-expressed Genes Details", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
-                helpText("Detailed correlation results for selected genes", 
-                        class = "help-text",
-                        style = "font-size: 12px; margin-bottom: 10px;"),
-                DT::dataTableOutput("coexpression_detailed_table", height = "700px") %>%
-                    shinycssloaders::withSpinner()
-            )
-        ),
-        tabPanel(
-            "Expression Heatmap",
-            div(
-                style = "padding: 8px;",
-                h6("Co-expression Heatmap", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
-                helpText("Heatmap visualization of co-expressed genes", 
-                        class = "help-text",
-                        style = "font-size: 12px; margin-bottom: 10px;"),
-                plotlyOutput("coexpression_heatmap", height = "700px") %>% 
-                    shinycssloaders::withSpinner()
-            )
-        ),
-        tabPanel(
-            "Correlation Network",
-            div(
-                style = "padding: 8px;",
-                h6("Correlation Network", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
-                helpText("Network visualization of gene correlations", 
-                        class = "help-text",
-                        style = "font-size: 12px; margin-bottom: 10px;"),
-                networkD3::forceNetworkOutput("coexpression_network", height = "700px") %>%
-                    shinycssloaders::withSpinner()
+    div(
+        style = "height: 100%;",
+        tabsetPanel(
+            id = "coexpression_results_tabs",
+            tabPanel(
+                "Co-expressed Genes",
+                div(
+                    style = "padding: 8px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                    div(
+                        style = "flex-shrink: 0;",
+                        h6("Co-expressed Genes Details", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
+                        helpText("Detailed correlation results for selected genes", 
+                                class = "help-text",
+                                style = "font-size: 12px; margin-bottom: 10px;")
+                    ),
+                    div(
+                        style = "flex: 1; min-height: 0; overflow: hidden;",
+                        DT::dataTableOutput("coexpression_detailed_table", height = "100%") %>%
+                            shinycssloaders::withSpinner()
+                    )
+                )
+            ),
+            tabPanel(
+                "Expression Heatmap",
+                div(
+                    style = "padding: 8px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                    div(
+                        style = "flex-shrink: 0;",
+                        h6("Co-expression Heatmap", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
+                        helpText("Heatmap visualization of co-expressed genes", 
+                                class = "help-text",
+                                style = "font-size: 12px; margin-bottom: 10px;")
+                    ),
+                    div(
+                        style = "flex: 1; min-height: 0; overflow: hidden;",
+                        plotlyOutput("coexpression_heatmap", height = "100%") %>% 
+                            shinycssloaders::withSpinner()
+                    )
+                )
+            ),
+            tabPanel(
+                "Correlation Network",
+                div(
+                    style = "padding: 8px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                    div(
+                        style = "flex-shrink: 0;",
+                        h6("Correlation Network", style = "margin-top: 0px; font-size: 14px; font-weight: bold;"),
+                        helpText("Network visualization of gene correlations", 
+                                class = "help-text",
+                                style = "font-size: 12px; margin-bottom: 10px;")
+                    ),
+                    div(
+                        style = "flex: 1; min-height: 0; overflow: hidden;",
+                        networkD3::forceNetworkOutput("coexpression_network", height = "100%") %>%
+                            shinycssloaders::withSpinner())
+                    )
+                )
             )
         )
-    )
 }
 
 # Co-expression log panel (shared by both modes) - Expanded to fill remaining height

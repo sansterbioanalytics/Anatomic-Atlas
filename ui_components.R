@@ -101,82 +101,169 @@ create_mode_selector_ui <- function(theme) {
 # Sidebar Components
 # =============================================================================
 
-# Create main sidebar with analysis controls - improved spacing
+# Create main sidebar with analysis controls - fully server-side rendering
 create_app_sidebar <- function(theme, width = 380) {
     dashboardSidebar(
         width = width,
         div(
-            style = "height: 100%; overflow-y: auto; padding: 10px;", # Better padding for readability
+            style = "height: 100%; overflow-y: auto; padding: 10px;",
             h4("Analysis Controls", 
-               style = paste0("margin: 0 0 15px 0; color: ", theme$text_white, "; font-size: 18px; font-weight: bold;")), # Better margins and larger font
+               style = paste0("margin: 0 0 15px 0; color: ", theme$text_white, "; font-size: 18px; font-weight: bold;")),
             
-            # Mode-specific controls - unified components
-            conditionalPanel(
-                condition = "input.app_mode == 'target'",
-                create_target_mode_controls(theme)
-            ),
-            
-            conditionalPanel(
-                condition = "input.app_mode == 'explorer'",
-                create_explorer_mode_controls(theme)
-            )
+            # Server-side rendered controls based on mode
+            uiOutput("sidebar_controls")
         )
     )
 }
 
-# Target Mode Controls - Using Explorer Mode gene selection structure - improved spacing
-create_target_mode_controls <- function(theme) {
+# Simple Gene Selection UI - Server-side rendered
+create_simple_gene_selection_ui <- function(theme) {
     div(
-        class = "target-mode-controls",
-        style = "padding: 0;", # No additional padding needed with improved component spacing
-        tagList(
-            # Gene selection section - reuse unified component (same as Explorer)
-            create_gene_selection_ui(theme),
-            
-            # Cell type selection with visual grouping - unique to target mode
-            div(
-                class = "product-grouping-section",
-                style = "margin-top: 12px;", # Better margin between sections
-                create_product_grouping_ui(theme)
+        class = "gene-selection-container",
+        style = "margin: 0 0 15px 0; padding: 15px; background-color: rgba(255,255,255,0.08); border-radius: 8px; border: 2px solid rgba(255,255,255,0.15); width: 100%; box-sizing: border-box;",
+        
+        # Section header
+        div(
+            style = "margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px;",
+            h4("🧬 Gene Selection", 
+               style = paste0("color: ", theme$text_white, "; margin: 0; font-size: 18px; font-weight: bold; text-align: center;"))
+        ),
+        
+        helpText("Enter gene symbols or select from predefined gene sets:",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; margin-bottom: 15px; font-size: 13px; text-align: center;")),
+        
+        # Gene symbol input text area
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            textAreaInput(
+                "gene_textarea",
+                "Gene symbols (comma, space, or line separated):",
+                placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
+                value = "SCN11A",
+                rows = 5,
+                width = "100%"
+            )
+        ),
+        
+        # VALIDATION PANEL - Simple, no complex nesting
+        div(
+            style = "margin-bottom: 15px; width: 100%; min-height: 100px; background-color: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; padding: 10px;",
+            h6("🔍 Gene Validation", style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-weight: bold;")),
+            # Simple uiOutput without wrapper divs
+            uiOutput("gene_validation")
+        ),
+        
+        # Gene set selection dropdown
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            selectInput("gene_set_selection",
+                "Or choose from predefined gene sets:",
+                choices = c("Custom Genes" = "Custom Genes", "Loading..." = "loading"),
+                selected = "Custom Genes",
+                width = "100%"
             ),
             
-            # Analysis options - reuse unified component (same as Explorer)
+            helpText("Select a predefined gene set to populate the text area above.",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
+        ),
+        
+        # File upload option
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            h6("Or upload gene list (.txt, .csv):", 
+               style = paste0("color: ", theme$text_white, "; margin-bottom: 8px; font-size: 14px;")),
+            
             div(
-                class = "analysis-options-section",
-                style = "margin-top: 12px;", # Better margin between sections
-                create_analysis_options_ui(theme)
+                style = "background-color: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 4px; padding: 10px;",
+                fileInput("gene_file_upload",
+                         NULL,
+                         accept = c(".txt", ".csv"),
+                         width = "100%",
+                         buttonLabel = "Browse...",
+                         placeholder = "No file selected"
+                ),
+                
+                helpText("Upload a file with one gene per line or column.",
+                        class = "help-text",
+                        style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
             )
+        ),
+
+        # Display selected genes information
+        div(
+            style = "margin-bottom: 10px; width: 100%;",
+            uiOutput("selected_genes_display")
         )
     )
 }
 
-# Explorer Mode Controls - Compact interface with group comparison - improved spacing
-create_explorer_mode_controls <- function(theme) {
-    div(
-        class = "explorer-mode-controls",
-        style = "padding: 0;", # No additional padding needed with improved component spacing
-        tagList(
-            # Gene selection section - reuse unified component
-            create_gene_selection_ui(theme),
-            
-            # Group comparison section - unique to explorer mode
+# Unified Gene Selection Inputs (used by both modes)
+create_gene_selection_inputs <- function(theme) {
+    tagList(
+        # Gene symbol input text area
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            textAreaInput(
+                "gene_textarea",
+                "Gene symbols (comma, space, or line separated):",
+                placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
+                value = "SCN11A",
+                rows = 5,
+                width = "100%"
+            )
+        ),
+        
+        # VALIDATION PANEL
+        div(
+            class = "validation-panel-container",
+            style = "margin-bottom: 15px; width: 100%; min-height: 100px;",
             div(
-                class = "contrast-selection-section",
-                style = "margin-top: 12px;", # Better margin between sections
-                create_contrast_selection_ui(theme)
+                style = "background-color: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; padding: 10px;",
+                h6("🔍 Gene Validation", style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-weight: bold;")),
+                uiOutput("gene_validation")
+            )
+        ),
+        
+        # Gene set selection dropdown
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            selectInput("gene_set_selection",
+                "Or choose from predefined gene sets:",
+                choices = c("Custom Genes" = "Custom Genes", "Loading..." = "loading"),
+                selected = "Custom Genes",
+                width = "100%"
             ),
             
-            # Analysis options - reuse unified component
+            helpText("Select a predefined gene set to populate the text area above.",
+                class = "help-text",
+                style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
+        ),
+        
+        # File upload option
+        div(
+            style = "margin-bottom: 15px; width: 100%;",
+            h6("Or upload gene list (.txt, .csv):", 
+               style = paste0("color: ", theme$text_white, "; margin-bottom: 8px; font-size: 14px;")),
+            
             div(
-                class = "analysis-options-section",
-                style = "margin-top: 12px;", # Better margin between sections
-                create_analysis_options_ui(theme)
+                style = "background-color: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 4px; padding: 10px;",
+                fileInput("gene_file_upload",
+                         NULL,
+                         accept = c(".txt", ".csv"),
+                         width = "100%",
+                         buttonLabel = "Browse...",
+                         placeholder = "No file selected"
+                ),
+                
+                helpText("Upload a file with one gene per line or column.",
+                        class = "help-text",
+                        style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
             )
         )
     )
 }
-
-
 
 # Product grouping selection - improved spacing and readability (Target mode)
 create_product_grouping_ui <- function(theme) {
@@ -241,7 +328,7 @@ create_contrast_selection_ui <- function(theme) {
             style = "margin-bottom: 12px;", # Better margin
             selectInput("group1",
                 "Group 1 (Baseline):",
-                choices = NULL,
+                choices = c("Loading..." = ""),
                 multiple = FALSE
             )
         ),
@@ -250,111 +337,8 @@ create_contrast_selection_ui <- function(theme) {
             style = "margin-bottom: 12px;", # Better margin
             selectInput("group2",
                 "Group 2 (Comparison):",
-                choices = NULL,
+                choices = c("Loading..." = ""),
                 multiple = FALSE
-            )
-        )
-    )
-}
-
-# Gene selection UI component - improved spacing and readability
-create_gene_selection_ui <- function(theme) {
-    div(
-        class = "gene-selection-container",
-        style = "margin: 8px 0; padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);", # Better margins and padding
-        
-        # Section header
-        h5("Gene Selection", style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 16px; font-weight: bold;")), # Larger header
-        
-        helpText("Enter gene symbols or select from predefined gene sets:",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: 10px; font-size: 12px;")), # Better spacing
-        
-        # 1. FIRST: Gene symbol input text area - larger and more spacious
-        div(
-            style = "margin-bottom: 12px;", # More margin
-            textAreaInput(
-                "gene_textarea",
-                "Gene symbols (comma, space, or line separated):",
-                placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
-                value = "SCN11A",  # Default gene
-                rows = 6,  # Increased from 4 to 6 for better usability
-                width = "100%"
-            )
-        ),
-        
-        # 2. SECOND: Real-time validation output - always visible with better spacing
-        div(
-            style = "margin-bottom: 12px;", # More margin
-            uiOutput("gene_validation")
-        ),
-        
-        # 3. THIRD: Gene set selection dropdown - better spacing
-        div(
-            style = "margin-bottom: 12px;", # More margin
-            selectInput("gene_set_selection",
-                "Or choose from predefined gene sets:",
-                choices = c("Custom Genes" = "Custom Genes"),
-                selected = "Custom Genes",
-                width = "100%"
-            ),
-            helpText(
-                "Select a predefined gene set to populate the text area above.",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; font-size: 11px;") # Slightly larger font
-            )
-        ),
-        
-        # 4. FOURTH: File upload for large lists - improved styling
-        div(
-            style = "margin-bottom: 12px; padding: 8px; background-color: rgba(255,255,255,0.08); border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);", # Better margins and padding
-            fileInput(
-                "gene_file_upload",
-                "Or upload gene list (.txt, .csv):",
-                accept = c(".csv", ".tsv", ".txt"),
-                placeholder = "No file selected",
-                width = "100%"
-            ),
-            helpText(
-                "Upload a file with one gene per line or column.",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;") # Better spacing
-            )
-        ),
-        
-        # Display selected genes information - better spacing
-        div(
-            style = "margin-bottom: 8px;", # Better margin
-            uiOutput("selected_genes_display")
-        ),
-        
-        # Gene pagination controls
-        create_gene_pagination_ui(theme)
-    )
-}
-
-# Gene pagination UI component - improved button sizing
-create_gene_pagination_ui <- function(theme) {
-    conditionalPanel(
-        condition = "output.show_gene_pagination",
-        div(
-            style = "margin-top: 8px;", # Better margin
-            h6("Expression Plot Controls", style = paste0("color: ", theme$text_white, "; margin-bottom: 6px; font-size: 14px;")), # Better spacing and larger font
-            fluidRow(
-                column(6, 
-                    actionButton("prev_genes", "← Prev", 
-                               class = "btn-outline-primary btn-sm btn-block", # Changed to btn-sm for better size
-                               style = paste0("color: ", theme$text_white, "; border-color: ", theme$text_white, "; font-size: 12px; padding: 6px 8px;")) # Better font and padding
-                ),
-                column(6,
-                    actionButton("next_genes", "Next →", 
-                               class = "btn-outline-primary btn-sm btn-block", # Changed to btn-sm for consistency
-                               style = paste0("color: ", theme$text_white, "; border-color: ", theme$text_white, "; font-size: 12px; padding: 6px 8px;")) # Better font and padding
-                )
-            ),
-            div(
-                style = paste0("text-align: center; margin-top: 6px; color: ", theme$text_light, "; font-size: 11px;"), # Better margin and font size
-                textOutput("gene_pagination_info", inline = TRUE)
             )
         )
     )
@@ -363,7 +347,6 @@ create_gene_pagination_ui <- function(theme) {
 # =============================================================================
 # Main Content Components
 # =============================================================================
-
 
 # Analysis options UI component - improved spacing and readability (shared between modes)
 create_analysis_options_ui <- function(theme) {
@@ -411,7 +394,7 @@ create_analysis_options_ui <- function(theme) {
 # Unified Components (Shared between modes)
 # =============================================================================
 
-# Unified expression plot box - used by Explorer mode
+# Unified expression plot box - used by Explorer mode with full height utilization
 create_unified_expression_plot_box <- function() {
     box(
         title = "Expression Analysis (BETA)",
@@ -419,34 +402,47 @@ create_unified_expression_plot_box <- function() {
         solidHeader = TRUE,
         width = 12,  # Full width to match expression data table
         height = "900px",
-        tabsetPanel(
-            tabPanel(
-                "Gene Set Heatmap",
-                div(
-                    style = "padding: 8px;", # Better padding for readability
-                    helpText("Heatmap of mean expression across selected groups", 
-                            class = "help-text",
-                            style = "font-size: 12px; margin-bottom: 10px;"), # Better font size and margin
-                    plotlyOutput("gene_set_heatmap", height = "820px") %>% withSpinner()
-                )
-            ),
-            tabPanel(
-                "Co-Expression Analysis",
-                div(
-                    style = "padding: 8px;", # Better padding for readability
-                    fluidRow(
-                        column(
-                            width = 4,
-                            wellPanel(
-                                style = "padding: 12px; height: 800px; overflow-y: auto;", # Better padding
-                                create_coexpression_controls()
-                            )
+        
+        # Use flexbox to fill available height
+        div(
+            style = "height: calc(100% - 50px);", # Account for box header
+            tabsetPanel(
+                id = "expression_tabs",
+                tabPanel(
+                    "Gene Set Heatmap",
+                    div(
+                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                        div(
+                            style = "flex-shrink: 0;",
+                            helpText("Heatmap of mean expression across selected groups", 
+                                    class = "help-text",
+                                    style = "font-size: 12px; margin-bottom: 10px;")
                         ),
-                        column(
-                            width = 8,
-                            div(
-                                style = "height: 800px;",
-                                create_coexpression_results()
+                        div(
+                            style = "flex: 1; min-height: 0;",
+                            plotlyOutput("gene_set_heatmap", height = "100%") %>% withSpinner()
+                        )
+                    )
+                ),
+                tabPanel(
+                    "Co-Expression Analysis",
+                    div(
+                        style = "padding: 8px; height: 100%; overflow: hidden;",
+                        fluidRow(
+                            style = "height: 100%;",
+                            column(
+                                width = 4,
+                                wellPanel(
+                                    style = "padding: 12px; height: 100%; overflow-y: auto; margin: 0;",
+                                    create_coexpression_controls()
+                                )
+                            ),
+                            column(
+                                width = 8,
+                                div(
+                                    style = "height: 100%; padding-left: 15px; overflow: hidden;",
+                                    create_coexpression_results()
+                                )
                             )
                         )
                     )
@@ -456,14 +452,23 @@ create_unified_expression_plot_box <- function() {
     )
 }
 
-# Create expression data table box
+# Create expression data table box with proper height constraints and overflow handling
 create_expression_table_box <- function() {
     box(
         title = textOutput("expression_table_title", inline = TRUE),
         status = "primary",
         solidHeader = TRUE,
         width = 12,
-        DT::dataTableOutput("expression_table") %>% withSpinner()
+        height = "500px",  # Set explicit height for the table section
+        
+        # Use flexbox with proper overflow control to prevent spilling
+        div(
+            style = "height: calc(100% - 50px); display: flex; flex-direction: column; overflow: hidden;", # Account for box header and prevent overflow
+            div(
+                style = "flex: 1; min-height: 300px; max-height: 450px; overflow: hidden;",  # Add max-height and overflow control
+                DT::dataTableOutput("expression_table", height = "100%") %>% withSpinner()
+            )
+        )
     )
 }
 
@@ -535,7 +540,7 @@ create_explorer_mode_layout <- function() {
     )
 }
 
-# GeneSet Analysis box - optimized expression distribution boxplot
+# GeneSet Analysis box - optimized expression distribution boxplot with full height utilization
 create_geneset_analysis_box <- function() {
     box(
         title = "GeneSet Expression Analysis",
@@ -544,61 +549,67 @@ create_geneset_analysis_box <- function() {
         width = 6,
         height = "900px",
         
-        # Expression distribution boxplot - focused on responsive performance
+        # Use flexbox to utilize full height
         div(
-            id = "geneset-expression-container",
-            style = "padding: 4px;", # Minimal padding
-            h5("Expression Distribution", style = "margin: 0 0 6px 0; font-weight: bold;"),
+            style = "display: flex; flex-direction: column; height: calc(100% - 50px);", # Account for box header
             
-            # Compact navigation controls for gene pagination
-            conditionalPanel(
-                condition = "output.show_gene_pagination",
-                div(
-                    style = "margin-bottom: 6px; padding: 4px 6px; background-color: #f8f9fa; border-radius: 4px; text-align: center;",
-                    fluidRow(
-                        column(4,
-                            actionButton("prev_genes", "← Previous 10", 
-                                       class = "btn-xs btn-default", 
-                                       style = "width: 100%; font-size: 10px; padding: 2px 4px;")
-                        ),
-                        column(4,
-                            div(
-                                style = "padding-top: 2px; font-size: 10px; color: #666;",
-                                uiOutput("gene_pagination_info")
+            # Expression distribution section - flexible height
+            div(
+                id = "geneset-expression-container",
+                style = "flex: 1; display: flex; flex-direction: column; padding: 4px; min-height: 0;", # min-height: 0 allows flex shrinking
+                h5("Expression Distribution", style = "margin: 0 0 6px 0; font-weight: bold; flex-shrink: 0;"),
+                
+                # Compact navigation controls for gene pagination
+                conditionalPanel(
+                    condition = "output.show_gene_pagination",
+                    div(
+                        style = "margin-bottom: 6px; padding: 4px 6px; background-color: #f8f9fa; border-radius: 4px; text-align: center; flex-shrink: 0;",
+                        fluidRow(
+                            column(4,
+                                actionButton("prev_genes", "← Previous 10", 
+                                           class = "btn-xs btn-default", 
+                                           style = "width: 100%; font-size: 10px; padding: 2px 4px;")
+                            ),
+                            column(4,
+                                div(
+                                    style = "padding-top: 2px; font-size: 10px; color: #666;",
+                                    uiOutput("gene_pagination_info")
+                                )
+                            ),
+                            column(4,
+                                actionButton("next_genes", "Next 10 →", 
+                                           class = "btn-xs btn-default",
+                                           style = "width: 100%; font-size: 10px; padding: 2px 4px;")
                             )
-                        ),
-                        column(4,
-                            actionButton("next_genes", "Next 10 →", 
-                                       class = "btn-xs btn-default",
-                                       style = "width: 100%; font-size: 10px; padding: 2px 4px;")
                         )
                     )
+                ),
+                
+                # Main expression boxplot - takes remaining height
+                div(
+                    style = "flex: 1; min-height: 300px;",
+                    plotlyOutput("expression_histogram", height = "100%") %>% withSpinner()
                 )
             ),
             
-            # Main expression boxplot - optimized for fast rendering
-            plotlyOutput("expression_histogram", height = "520px") %>% withSpinner()
-        ),
-        
-        # Analysis stats section - improved spacing
-        div(
-            id = "analysis-stats-section",
-            style = "padding: 8px;", # Better padding for readability
-            h4(textOutput("contrast_title"), style = "margin: 10px 0 8px 0; font-weight: bold; font-size: 16px;"), # Better spacing and larger font
+            # Summary Table section - fixed height but optimized with overflow control
             div(
-                class = "analysis-stats-container",
-                style = "max-height: 280px; overflow-y: auto; padding-right: 8px;", # Better padding
-                uiOutput("sample_counts_ui"),
-                conditionalPanel(
-                    condition = "!output.current_genes_available",
-                    uiOutput("overall_stats_ui")
+                id = "summary-table-section",
+                style = "flex-shrink: 0; height: 320px; padding: 8px; border-top: 1px solid #dee2e6; overflow: hidden;", # Fixed height for table section with overflow control
+                h5("Product Expression Summary", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
+                helpText("Detailed statistics for each product showing expression levels and rankings", 
+                        class = "help-text",
+                        style = "font-size: 12px; margin-bottom: 10px;"),
+                div(
+                    style = "height: 320px; overflow: hidden;",  # Reduced wrapper container height to match table scrollY
+                    DT::dataTableOutput("portfolio_summary_table", height = "100%") %>% withSpinner()
                 )
             )
         )
     )
 }
 
-# Product Portfolio Overview box - Target Mode specific
+# Product Portfolio Overview box - Target Mode specific with full height utilization
 create_product_portfolio_overview_box <- function() {
     box(
         title = "Product Portfolio Overview",
@@ -607,38 +618,44 @@ create_product_portfolio_overview_box <- function() {
         width = 6,
         height = "900px",
         
-        tabsetPanel(
-            tabPanel(
-                "Portfolio Ranking",
-                div(
-                    style = "padding: 8px;", # Better padding
-                    h5("Expression Ranking by Product", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"), # Better spacing
-                    helpText("Products ranked by mean gene expression (bars = product average, points = individual genes)", 
-                            class = "help-text",
-                            style = "font-size: 12px; margin-bottom: 10px;"), # Better font size and margin
-                    plotlyOutput("portfolio_ranking_plot", height = "380px") %>% withSpinner()
-                )
-            ),
-            tabPanel(
-                "Target Heatmap",
-                div(
-                    style = "padding: 8px;", # Better padding
-                    h5("Gene × Product Expression Matrix", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"), # Better spacing
-                    helpText("Heatmap showing expression of selected genes across Anatomic products", 
-                            class = "help-text", 
-                            style = "font-size: 12px; margin-bottom: 10px;"), # Better font size and margin
-                    plotlyOutput("target_gene_heatmap", height = "380px") %>% withSpinner()
-                )
-            ),
-            tabPanel(
-                "Summary Table",
-                div(
-                    style = "padding: 8px;", # Better padding
-                    h5("Product Expression Summary", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"), # Better spacing
-                    helpText("Detailed statistics for each product showing expression levels and rankings", 
-                            class = "help-text",
-                            style = "font-size: 12px; margin-bottom: 10px;"), # Better font size and margin
-                    DT::dataTableOutput("portfolio_summary_table", height = "380px") %>% withSpinner()
+        # Use flexbox container to fill available height
+        div(
+            style = "height: calc(100% - 50px);", # Account for box header
+            tabsetPanel(
+                id = "portfolio_tabs",
+                tabPanel(
+                    "Portfolio Ranking",
+                    div(
+                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column;",
+                        div(
+                            style = "flex-shrink: 0;",
+                            h5("Expression Ranking by Product", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
+                            helpText("Products ranked by mean gene expression (bars = product average, points = individual genes)", 
+                                    class = "help-text",
+                                    style = "font-size: 12px; margin-bottom: 10px;")
+                        ),
+                        div(
+                            style = "flex: 1; min-height: 0;",
+                            plotlyOutput("portfolio_ranking_plot", height = "100%") %>% withSpinner()
+                        )
+                    )
+                ),
+                tabPanel(
+                    "Target Heatmap",
+                    div(
+                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column;",
+                        div(
+                            style = "flex-shrink: 0;",
+                            h5("Gene × Product Expression Matrix", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
+                            helpText("Heatmap showing expression of selected genes across Anatomic products", 
+                                    class = "help-text", 
+                                    style = "font-size: 12px; margin-bottom: 10px;")
+                        ),
+                        div(
+                            style = "flex: 1; min-height: 0;",
+                            plotlyOutput("target_gene_heatmap", height = "100%") %>% withSpinner()
+                        )
+                    )
                 )
             )
         )
