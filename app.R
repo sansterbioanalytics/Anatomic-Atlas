@@ -463,8 +463,6 @@ server <- function(input, output, session) {
 
     # Unified helper function to generate validation UI (used by both modes)
     generate_validation_ui <- function() {
-        cat("generate_validation_ui() called for mode:", values$app_mode, "\n")
-        
         # Use unified input IDs
         gene_source <- input$gene_set_selection %||% "Custom Genes"
         genes_entered <- NULL
@@ -524,13 +522,6 @@ server <- function(input, output, session) {
         # Create a simplified validation display with better suggestions
         validation_div <- div(
             style = "background-color: #f8f9fa; border: 2px solid #28a745; border-radius: 4px; padding: 15px; font-size: 14px; margin: 0; color: #495057; width: 100%; box-sizing: border-box;",
-            
-            # Mode info for debugging
-            div(
-                style = "background-color: #17a2b8; color: white; padding: 5px; margin-bottom: 10px; font-weight: bold; border-radius: 3px;",
-                paste("MODE:", values$app_mode, "| SOURCE:", validation_label)
-            ),
-            
             # Summary with counts
             div(
                 style = "margin-bottom: 12px; font-size: 16px;",
@@ -603,22 +594,12 @@ server <- function(input, output, session) {
 
     # Unified validation output for both modes
     output$gene_validation <- renderUI({
-        cat("Gene validation render called for mode:", values$app_mode, "\n")
-        
         # Debug current inputs
+        cat("Gene validation render called for mode:", values$app_mode, "\n")
         cat("gene_set_selection:", input$gene_set_selection %||% "NULL", "\n")
         cat("gene_textarea:", nchar(input$gene_textarea %||% ""), "characters\n")
         cat("available_genes:", length(values$available_genes), "genes\n")
-        
         validation_result <- generate_validation_ui()
-        cat("Validation result generated for mode:", values$app_mode, "\n")
-        
-        # Extra debugging - check if result is null
-        if (is.null(validation_result)) {
-            cat("WARNING: validation_result is NULL!\n")
-            return(div("Validation result is NULL"))
-        }
-        
         return(validation_result)
     })
 
