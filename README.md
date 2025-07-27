@@ -29,6 +29,8 @@ The application expects data in the following format:
 - `sample`: Sample identifier (matching metadata)
 - `expression`: Normalized expression value (VST recommended)
 
+These files are tracked in git-lfs, which you may need to install on your system or through conda. If the whole files didn't pull, run `git lfs pull` after installing this dependency.
+
 ## Usage
 
 1. **Launch Application**:

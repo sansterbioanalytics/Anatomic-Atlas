@@ -156,15 +156,22 @@ generate_app_css <- function(theme) {
         .main-header .logo {
             background: transparent !important;
             border: none !important;
-            padding: 0 !important;
+            padding: 0 15px !important;
             height: 60px !important;
             line-height: 60px !important;
             display: flex !important;
             align-items: center !important;
+            font-family: ", theme$font_family_primary, " !important;
+            font-weight: 700 !important;
+            font-size: 22px !important;
+            color: ", theme$primary_color, " !important;
+            text-decoration: none !important;
+            letter-spacing: -0.5px !important;
         }
         
         .main-header .logo:hover {
             background: rgba(220, 20, 60, 0.05) !important;
+            color: ", theme$secondary_color, " !important;
         }
         
         /* Fix navbar content positioning */

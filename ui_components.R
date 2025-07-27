@@ -21,39 +21,28 @@ source("ui_coexpression_module.R")  # Co-expression analysis UI components
 # Create application header with logo, title, and mode selector
 create_app_header <- function(theme) {
     dashboardHeader(
-        title = div(
-            # Custom logo that will replace the default title area
-            tags$a(
-                href = theme$logo_link_url,
-                target = "_blank",
-                class = "logo-link",
-                style = "display: flex; align-items: center; height: 60px; padding-left: 15px;",
-                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
-                    style = "height: 42px; transition: transform 0.2s ease;"),
-                onmouseover = "this.querySelector('img').style.transform = 'scale(1.05)'",
-                onmouseout = "this.querySelector('img').style.transform = 'scale(1)'"
-            )
-        ),
-        titleWidth = 200,  # Reserve space for logo
+        title = "Anatomic RNA Atlas",  # Simple title that won't be escaped
+        titleWidth = 300,  # Increase width to accommodate the title
         
-        # Add title and mode selector in the navbar area
+        # Add logo and mode selector in the navbar area
         tags$li(
             class = "dropdown",
             style = "margin: 0; padding: 0; height: 60px; display: flex; align-items: center;",
             
-            # Center content container
-            div(
-                class = "header-center-content",
-                style = "display: flex; align-items: center; gap: 30px; height: 60px; margin-left: 20px;",
-                
-                # Application Title with gradient effect
-                h1("Anatomic RNA Atlas", 
-                   class = "header-title",
-                   style = paste0("margin: 0; font-weight: 700; font-size: 26px; letter-spacing: -0.8px;")),
-                
-                # Mode Selector Buttons - Modern design
-                create_compact_mode_selector_ui(theme)
-            )
+            # Logo link
+            tags$a(
+                href = theme$logo_link_url,
+                target = "_blank",
+                class = "logo-link",
+                style = "display: flex; align-items: center; height: 60px; padding: 0 15px; margin-right: 20px;",
+                img(src = "anatomic_logo.png", class = "logo-primary", alt = "Anatomic Logo", 
+                    style = "height: 42px; transition: transform 0.2s ease;"),
+                onmouseover = "this.querySelector('img').style.transform = 'scale(1.05)'",
+                onmouseout = "this.querySelector('img').style.transform = 'scale(1)'"
+            ),
+            
+            # Mode Selector Buttons - Modern design
+            create_compact_mode_selector_ui(theme)
         )
     )
 }
@@ -116,84 +105,124 @@ create_app_sidebar <- function(theme, width = 380) {
     )
 }
 
-# Simple Gene Selection UI - Server-side rendered
+# Simple Gene Selection UI - Completely redesigned for better functionality
 create_simple_gene_selection_ui <- function(theme) {
     div(
         class = "gene-selection-container",
-        style = "margin: 0 0 15px 0; padding: 15px; background-color: rgba(255,255,255,0.08); border-radius: 8px; border: 2px solid rgba(255,255,255,0.15); width: 100%; box-sizing: border-box;",
+        style = paste0("margin: 10px 0; padding: 15px; background: linear-gradient(135deg, ", 
+                      theme$primary_dark, " 0%, ", theme$secondary_dark, " 100%); ",
+                      "border-radius: 8px; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"),
         
-        # Section header
+        # Header
         div(
-            style = "margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 8px;",
-            h4("🧬 Gene Selection", 
-               style = paste0("color: ", theme$text_white, "; margin: 0; font-size: 18px; font-weight: bold; text-align: center;"))
+            style = "margin-bottom: 15px; text-align: center;",
+            h5("🧬 Gene Selection", 
+               style = paste0("color: ", theme$text_white, "; margin: 0; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);"))
         ),
         
-        helpText("Enter gene symbols or select from predefined gene sets:",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: 15px; font-size: 13px; text-align: center;")),
-        
-        # Gene symbol input text area
+        # Gene Set Selection Method - Improved Radio Buttons
         div(
-            style = "margin-bottom: 15px; width: 100%;",
-            textAreaInput(
-                "gene_textarea",
-                "Gene symbols (comma, space, or line separated):",
-                placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
-                value = "SCN11A",
-                rows = 5,
-                width = "100%"
+            style = "margin-bottom: 20px; padding: 12px; background-color: rgba(255,255,255,0.08); border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);",
+            h6("Select gene input method:", 
+               style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 14px; font-weight: bold;")),
+            
+            radioButtons("gene_input_method",
+                NULL,
+                choices = list(
+                    "Manual Entry" = "manual",
+                    "Predefined Gene Sets" = "predefined",
+                    "Upload File" = "upload"
+                ),
+                selected = "manual",
+                inline = TRUE
+            ),
+            
+            tags$style(HTML(paste0("
+                #gene_input_method .radio-inline {
+                    margin-right: 20px;
+                    color: ", theme$text_white, ";
+                    font-size: 13px;
+                }
+                #gene_input_method input[type='radio'] {
+                    margin-right: 8px;
+                    transform: scale(1.2);
+                }
+            ")))
+        ),
+        
+        # Manual Entry Panel
+        conditionalPanel(
+            condition = "input.gene_input_method == 'manual'",
+            div(
+                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
+                h6("Enter gene symbols:", 
+                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
+                p("Separate multiple genes with commas, spaces, or new lines",
+                  style = paste0("color: ", theme$text_light, "; margin: 0 0 8px 0; font-size: 12px; font-style: italic;")),
+                textAreaInput("gene_textarea",
+                    NULL,
+                    value = "SCN11A",
+                    placeholder = "Enter gene symbols (e.g., SCN11A, CACNA1A, TRPV1)",
+                    rows = 4,
+                    width = "100%"
+                )
             )
         ),
         
-        # VALIDATION PANEL - Simple, no complex nesting
+        # Predefined Gene Sets Panel  
+        conditionalPanel(
+            condition = "input.gene_input_method == 'predefined'",
+            div(
+                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
+                h6("Choose from predefined gene sets:", 
+                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
+                
+                # Native reactive gene set dropdown
+                uiOutput("gene_set_dropdown"),
+                
+                # Gene set info display
+                div(id = "gene_set_info",
+                    style = "margin-top: 8px; padding: 8px; background-color: rgba(255,255,255,0.1); border-radius: 4px; min-height: 30px;",
+                    uiOutput("gene_set_info_display")
+                )
+            )
+        ),
+        
+        # File Upload Panel
+        conditionalPanel(
+            condition = "input.gene_input_method == 'upload'",
+            div(
+                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
+                h6("Upload gene list file:", 
+                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
+                p("Supported formats: .txt, .csv, .tsv",
+                  style = paste0("color: ", theme$text_light, "; margin: 0 0 8px 0; font-size: 12px; font-style: italic;")),
+                
+                div(
+                    style = "border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; padding: 15px; text-align: center; background-color: rgba(255,255,255,0.02);",
+                    fileInput("gene_file_upload",
+                             NULL,
+                             accept = c(".txt", ".csv", ".tsv"),
+                             width = "100%",
+                             buttonLabel = "📁 Browse Files",
+                             placeholder = "No file selected"
+                    )
+                )
+            )
+        ),
+        
+        # VALIDATION PANEL - Enhanced
         div(
-            style = "margin-bottom: 15px; width: 100%; min-height: 100px; background-color: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; padding: 10px;",
-            h6("🔍 Gene Validation", style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-weight: bold;")),
-            # Simple uiOutput without wrapper divs
+            id = "gene-validation-panel",
+            style = "margin-top: 15px; padding: 12px; background-color: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;",
+            h6("🔍 Gene Validation Results", 
+               style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 14px; font-weight: bold;")),
             uiOutput("gene_validation")
         ),
         
-        # Gene set selection dropdown
+        # Selected genes summary
         div(
-            style = "margin-bottom: 15px; width: 100%;",
-            selectInput("gene_set_selection",
-                "Or choose from predefined gene sets:",
-                choices = c("Custom Genes" = "Custom Genes", "Loading..." = "loading"),
-                selected = "Custom Genes",
-                width = "100%"
-            ),
-            
-            helpText("Select a predefined gene set to populate the text area above.",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
-        ),
-        
-        # File upload option
-        div(
-            style = "margin-bottom: 15px; width: 100%;",
-            h6("Or upload gene list (.txt, .csv):", 
-               style = paste0("color: ", theme$text_white, "; margin-bottom: 8px; font-size: 14px;")),
-            
-            div(
-                style = "background-color: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 4px; padding: 10px;",
-                fileInput("gene_file_upload",
-                         NULL,
-                         accept = c(".txt", ".csv"),
-                         width = "100%",
-                         buttonLabel = "Browse...",
-                         placeholder = "No file selected"
-                ),
-                
-                helpText("Upload a file with one gene per line or column.",
-                        class = "help-text",
-                        style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
-            )
-        ),
-
-        # Display selected genes information
-        div(
-            style = "margin-bottom: 10px; width: 100%;",
+            style = "margin-top: 10px; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border-left: 4px solid #28a745;",
             uiOutput("selected_genes_display")
         )
     )
@@ -324,23 +353,8 @@ create_contrast_selection_ui <- function(theme) {
                 class = "help-text",
                 style = paste0("color: ", theme$text_light, "; margin-bottom: 12px; font-size: 12px;")), # Better margin and font size
         
-        div(
-            style = "margin-bottom: 12px;", # Better margin
-            selectInput("group1",
-                "Group 1 (Baseline):",
-                choices = c("Loading..." = ""),
-                multiple = FALSE
-            )
-        ),
-        
-        div(
-            style = "margin-bottom: 12px;", # Better margin
-            selectInput("group2",
-                "Group 2 (Comparison):",
-                choices = c("Loading..." = ""),
-                multiple = FALSE
-            )
-        )
+        # Native reactive group dropdowns
+        uiOutput("group_comparison_dropdowns")
     )
 }
 
@@ -411,15 +425,15 @@ create_unified_expression_plot_box <- function() {
                 tabPanel(
                     "Gene Set Heatmap",
                     div(
-                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                        style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
                         div(
-                            style = "flex-shrink: 0;",
+                            style = "flex-shrink: 0; margin-bottom: 5px;",
                             helpText("Heatmap of mean expression across selected groups", 
                                     class = "help-text",
-                                    style = "font-size: 12px; margin-bottom: 10px;")
+                                    style = "font-size: 12px; margin: 0;")
                         ),
                         div(
-                            style = "flex: 1; min-height: 0;",
+                            style = "flex: 1; min-height: 600px;",
                             plotlyOutput("gene_set_heatmap", height = "100%") %>% withSpinner()
                         )
                     )
@@ -626,16 +640,16 @@ create_product_portfolio_overview_box <- function() {
                 tabPanel(
                     "Portfolio Ranking",
                     div(
-                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column;",
+                        style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
                         div(
-                            style = "flex-shrink: 0;",
-                            h5("Expression Ranking by Product", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
+                            style = "flex-shrink: 0; margin-bottom: 5px;",
+                            h5("Expression Ranking by Product", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
                             helpText("Products ranked by mean gene expression (bars = product average, points = individual genes)", 
                                     class = "help-text",
-                                    style = "font-size: 12px; margin-bottom: 10px;")
+                                    style = "font-size: 12px; margin: 0;")
                         ),
                         div(
-                            style = "flex: 1; min-height: 0;",
+                            style = "flex: 1; min-height: 600px;",
                             plotlyOutput("portfolio_ranking_plot", height = "100%") %>% withSpinner()
                         )
                     )
@@ -643,16 +657,16 @@ create_product_portfolio_overview_box <- function() {
                 tabPanel(
                     "Target Heatmap",
                     div(
-                        style = "padding: 8px; height: 100%; display: flex; flex-direction: column;",
+                        style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
                         div(
-                            style = "flex-shrink: 0;",
-                            h5("Gene × Product Expression Matrix", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
+                            style = "flex-shrink: 0; margin-bottom: 5px;",
+                            h5("Gene × Product Expression Matrix", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
                             helpText("Heatmap showing expression of selected genes across Anatomic products", 
                                     class = "help-text", 
-                                    style = "font-size: 12px; margin-bottom: 10px;")
+                                    style = "font-size: 12px; margin: 0;")
                         ),
                         div(
-                            style = "flex: 1; min-height: 0;",
+                            style = "flex: 1; min-height: 600px;",
                             plotlyOutput("target_gene_heatmap", height = "100%") %>% withSpinner()
                         )
                     )
