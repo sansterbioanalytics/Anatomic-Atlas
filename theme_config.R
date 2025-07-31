@@ -354,12 +354,12 @@ generate_app_css <- function(theme) {
             font-weight: bold;
         }
 
-        /* === CELL TYPE TOGGLE STYLING === */
+        /* CELL TYPE TOGGLES */
         .cell-type-toggle-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 12px;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 4px;
+            margin-bottom: 6px;
             max-width: 100%;
             overflow: hidden;
         }
@@ -367,16 +367,16 @@ generate_app_css <- function(theme) {
         .cell-type-toggle {
             display: block;
             margin: 0;
-            min-width: 0; /* Allow flex items to shrink */
+            min-width: 0;
         }
         
         .cell-type-toggle-btn {
-            padding: 8px 10px;
-            border: 2px solid #6c757d;
-            border-radius: 6px;
+            padding: 4px 6px;
+            border: 1px solid #6c757d;
+            border-radius: 4px;
             background-color: #6c757d;
             color: white;
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
@@ -388,7 +388,7 @@ generate_app_css <- function(theme) {
             overflow: hidden;
             text-overflow: ellipsis;
             box-sizing: border-box;
-            min-height: 36px;
+            min-height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -399,7 +399,7 @@ generate_app_css <- function(theme) {
             border-color: ", theme$primary_color, ";
             color: ", theme$primary_color, ";
             transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
         .cell-type-toggle-btn.active {
@@ -407,32 +407,33 @@ generate_app_css <- function(theme) {
             border-color: ", theme$primary_color, ";
             color: white;
             font-weight: bold;
-            box-shadow: 0 2px 6px rgba(220, 20, 60, 0.3);
+            box-shadow: 0 1px 4px rgba(220, 20, 60, 0.3);
         }
         
         .cell-type-toggle-btn.inactive {
             background-color: #6c757d;
             border-color: #6c757d;
             color: #ffffff;
+        }
         
         .cell-type-toggle-section {
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            border-radius: 6px;
+            margin-bottom: 6px;
+            padding: 4px 6px;
+            border-radius: 4px;
             background-color: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
         }
         
         .cell-type-section-header {
             color: ", theme$text_white, ";
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
-        /* === SIDEBAR STYLING === */
+        /* SIDEBAR */
         .main-sidebar {
             background-color: ", theme$background_dark, " !important;
             width: 350px !important;
@@ -459,14 +460,12 @@ generate_app_css <- function(theme) {
             border-left-color: ", theme$secondary_color, ";
         }
 
-        /* === ENHANCED SIDEBAR FORM CONTROLS === */
         .sidebar .form-group {
-            margin-bottom: ", theme$spacing_lg, ";
+            margin-bottom: ", theme$spacing_sm, ";
             max-width: 100%;
             overflow: hidden;
         }
         
-        /* === ENHANCED SIDEBAR FORM CONTROLS === */
         .sidebar .form-control {
             background-color: ", theme$background_white, " !important;
             border: 1px solid ", theme$border_medium, " !important;
@@ -497,7 +496,7 @@ generate_app_css <- function(theme) {
             box-shadow: 0 0 0 0.2rem rgba(220, 20, 60, 0.25) !important;
         }
         
-        /* === ENHANCED SELECTIZE STYLING === */
+        /* SELECTIZE CONTROLS */
         .selectize-input {
             background: ", theme$background_white, " !important;
             border: 2px solid ", theme$border_medium, " !important;
@@ -677,13 +676,13 @@ generate_app_css <- function(theme) {
             margin-bottom: ", theme$spacing_sm, " !important;
         }
         
-        /* === SECTION DIVIDERS === */
+        /* SECTION DIVIDERS */
         .gene-selection-container,
         .product-grouping-section,
         .contrast-selection-container {
-            border-bottom: 2px solid rgba(255,255,255,0.15);
-            padding-bottom: ", theme$spacing_lg, ";
-            margin-bottom: ", theme$spacing_lg, ";
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: ", theme$spacing_sm, ";
+            margin-bottom: ", theme$spacing_sm, ";
             max-width: 100%;
             overflow: hidden;
             box-sizing: border-box;
@@ -1217,8 +1216,8 @@ generate_app_css <- function(theme) {
             background-color: ", theme$background_light, " !important;
             border: 1px solid ", theme$border_medium, " !important;
             border-radius: ", theme$radius_sm, " !important;
-            padding: 10px !important;
-            margin: 8px 0 !important;
+            padding: 6px !important;
+            margin: 4px 0 !important;
             color: ", theme$text_primary, " !important;
             font-size: ", theme$font_size_small, " !important;
         }
@@ -1226,7 +1225,7 @@ generate_app_css <- function(theme) {
         .gene-validation-container .validation-summary {
             font-weight: bold !important;
             color: ", theme$text_primary, " !important;
-            margin-bottom: 6px !important;
+            margin-bottom: 3px !important;
         }
         
         .gene-validation-container .validation-valid {

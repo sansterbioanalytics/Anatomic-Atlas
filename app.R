@@ -117,17 +117,22 @@ server <- function(input, output, session) {
     # Use pre-loaded data
     gene_sets <- gene_sets_global
 
-    # Reactive values - initialize with pre-loaded data including gene set values
+    # Reactive values - initialize with pre-loaded data
     values <- reactiveValues(
         sample_data = atlas_data_global$sample_data,
         expression_data = atlas_data_global$expression_data,
         contrast_data = NULL,
-        data_loaded = TRUE,  # Already loaded!
-        gene_page = 1,  # Current page for gene pagination (always 10 genes per page)
-        app_mode = "target",  # Track current application mode
-        cell_type_toggles = list(),  # Track cell type toggle states for target mode
-        validated_genes = c("SCN11A"),  # Initialize with default gene
-        available_genes = NULL  # Will be populated when expression data is processed
+        data_loaded = TRUE,
+        gene_page = 1,
+        app_mode = "target",
+        cell_type_toggles = list(),
+        validated_genes = c(),
+        available_genes = NULL,
+        # Simple gene sharing between modes - only manual text preserved
+        target_mode_textarea = "",
+        explorer_mode_textarea = "",
+        target_mode_input_method = "manual",
+        explorer_mode_input_method = "manual"
     )
 
     cat("Server initialized with pre-loaded data\n")
@@ -135,8 +140,6 @@ server <- function(input, output, session) {
     if (length(gene_sets) > 0) {
         cat("Gene set names:", names(gene_sets), "\n")
     }
-
-    # Enhanced file upload handler with multiple format support and column detection
     observeEvent(input$gene_file_upload, {
         req(input$gene_file_upload)
         
@@ -197,16 +200,15 @@ server <- function(input, output, session) {
             genes <- genes[genes != "" & !is.na(genes)]
             
             if (length(genes) > 0) {
-                # Store uploaded genes and update textarea
-                values$uploaded_genes <- genes
+                # Convert uploaded genes directly to manual text - no separate storage needed
                 gene_string <- paste(genes, collapse = ", ")
                 updateTextAreaInput(session, "gene_textarea", value = gene_string)
                 
-                # Switch to upload mode and then to manual to show the genes
+                # Always switch to manual mode - this makes the genes part of the manual text system
                 updateRadioButtons(session, "gene_input_method", selected = "manual")
                 
                 showNotification(
-                    paste("Loaded", length(genes), "genes from", toupper(file_ext), "file"),
+                    paste("Loaded", length(genes), "genes from", toupper(file_ext), "file and converted to manual entry"),
                     type = "success",
                     duration = 3
                 )
@@ -224,7 +226,7 @@ server <- function(input, output, session) {
         cat("Rendering sidebar controls for mode:", values$app_mode, "\n")
         
         if (values$app_mode == "target") {
-            # Target Mode Controls
+            # Target Mode Controls - Compact layout
             tagList(
                 # Gene Selection (shared)
                 create_simple_gene_selection_ui(app_theme),
@@ -232,34 +234,34 @@ server <- function(input, output, session) {
                 # Cell Type Selection (Target mode specific)
                 div(
                     class = "cell-type-section",
-                    style = "margin-bottom: 15px; width: 100%;",
+                    style = "margin-bottom: 8px; width: 100%;", # Reduced margin
                     create_product_grouping_ui(app_theme) 
                 ),
                 
                 # Analysis Options (shared)
                 div(
                     class = "analysis-options-section", 
-                    style = "margin-bottom: 15px; width: 100%;",
+                    style = "margin-bottom: 8px; width: 100%;", # Reduced margin
                     create_analysis_options_ui(app_theme)
                 )
             )
         } else {
-            # Explorer Mode Controls
+            # Explorer Mode Controls - Compact layout
             tagList(
                 # Gene Selection (shared)
                 create_simple_gene_selection_ui(app_theme),
                 
                 # Group Comparison (Explorer mode specific)
-                div(
-                    class = "contrast-selection-section",
-                    style = "margin-bottom: 15px; width: 100%;",
-                    create_contrast_selection_ui(app_theme)
-                ),
+                # div(
+                #     class = "contrast-selection-section",
+                #     style = "margin-bottom: 8px; width: 100%;", # Reduced margin
+                #     create_contrast_selection_ui(app_theme)
+                # ),
                 
                 # Analysis Options (shared)
                 div(
                     class = "analysis-options-section",
-                    style = "margin-bottom: 15px; width: 100%;",
+                    style = "margin-bottom: 8px; width: 100%;", # Reduced margin
                     create_analysis_options_ui(app_theme)
                 )
             )
@@ -394,71 +396,12 @@ server <- function(input, output, session) {
             )
         )
     })
-    
-    # CONSOLIDATED gene selection handler - handles all gene input methods
-    observe({
-        # Get current input method
-        input_method <- input$gene_input_method %||% "manual"
-        selected_genes <- NULL
-        
-        # Extract genes based on method
-        if (input_method == "manual") {
-            textarea_value <- input$gene_textarea %||% ""
-            if (nchar(textarea_value) > 0) {
-                selected_genes <- parse_gene_input(textarea_value)
-            }
-        } else if (input_method == "predefined") {
-            gene_set_name <- input$gene_set_selection %||% ""
-            if (gene_set_name != "" && gene_set_name != "loading" && gene_set_name != "Select a gene set..." &&
-                !is.null(gene_sets) && gene_set_name %in% names(gene_sets)) {
-                selected_genes <- gene_sets[[gene_set_name]]
-                cat("Using predefined gene set:", gene_set_name, "with", length(selected_genes), "genes\n")
-            }
-        } else if (input_method == "upload") {
-            selected_genes <- values$uploaded_genes
-        }
-        
-        # Validate and update
-        if (!is.null(selected_genes) && length(selected_genes) > 0 && 
-            !is.null(values$available_genes) && length(values$available_genes) > 0) {
-            
-            valid_genes <- intersect(selected_genes, values$available_genes)
-            values$validated_genes <- if(length(valid_genes) > 0) valid_genes else c("SCN11A")
-            
-            cat("Updated validated genes:", length(values$validated_genes), "genes from method:", input_method, "\n")
-        }
-    })
-    
-    # Gene set info display
-    output$gene_set_info_display <- renderUI({
-        if (is.null(input$gene_set_selection) || input$gene_set_selection == "") {
-            return(div(
-                style = "color: #6c757d; font-style: italic; text-align: center; padding: 8px;",
-                "Select a gene set to see details..."
-            ))
-        }
-        
-        if (!is.null(gene_sets) && input$gene_set_selection %in% names(gene_sets)) {
-            genes <- gene_sets[[input$gene_set_selection]]
-            return(div(
-                style = "color: #28a745; font-size: 12px;",
-                tags$strong(paste("📊", length(genes), "genes in this set")),
-                br(),
-                tags$small(paste("First few:", paste(head(genes, 5), collapse = ", ")))
-            ))
-        }
-        
-        return(div(
-            style = "color: #dc3545;",
-            "Gene set not found"
-        ))
-    })
 
     # Initialize validated genes on startup to ensure plots work immediately
     observe({
         if (!is.null(values$available_genes) && is.null(values$validated_genes)) {
             # Parse the default gene from textarea
-            default_genes <- parse_gene_input("SCN11A")
+            default_genes <- parse_gene_input("")
             if (!is.null(default_genes) && length(default_genes) > 0) {
                 valid_genes <- intersect(default_genes, values$available_genes)
                 if (length(valid_genes) > 0) {
@@ -469,19 +412,72 @@ server <- function(input, output, session) {
         }
     })
 
-    # Mode switching observer - handles both button clicks and radio inputs
+    # Mode switching observers with gene sharing
     observeEvent(input$mode_target, {
+        # Save current textarea content before switching
+        if (values$app_mode == "explorer") {
+            values$explorer_mode_textarea <- input$gene_textarea %||% ""
+            values$explorer_mode_input_method <- input$gene_input_method %||% "manual"
+        }
+        
         values$app_mode <- "target"
         updateRadioButtons(session, "app_mode", selected = "target")
+        
+        # Restore target mode content, but if it's empty and we have current content, preserve it
+        restore_content <- values$target_mode_textarea
+        if (restore_content == "" && !is.null(input$gene_textarea) && input$gene_textarea != "") {
+            restore_content <- input$gene_textarea
+        }
+        updateTextAreaInput(session, "gene_textarea", value = restore_content)
+        updateRadioButtons(session, "gene_input_method", selected = values$target_mode_input_method)
     })
     
     observeEvent(input$mode_explorer, {
+        # Save current textarea content before switching
+        if (values$app_mode == "target") {
+            values$target_mode_textarea <- input$gene_textarea %||% ""
+            values$target_mode_input_method <- input$gene_input_method %||% "manual"
+        }
+        
         values$app_mode <- "explorer"
         updateRadioButtons(session, "app_mode", selected = "explorer")
+        
+        # Restore explorer mode content, but if it's empty and we have current content, preserve it
+        restore_content <- values$explorer_mode_textarea
+        if (restore_content == "" && !is.null(input$gene_textarea) && input$gene_textarea != "") {
+            restore_content <- input$gene_textarea
+        }
+        updateTextAreaInput(session, "gene_textarea", value = restore_content)
+        updateRadioButtons(session, "gene_input_method", selected = values$explorer_mode_input_method)
     })
     
     # Handle radio button changes (for compatibility)
     observeEvent(input$app_mode, {
+        old_mode <- values$app_mode
+        
+        # Save current textarea content before switching
+        if (old_mode == "target" && input$app_mode == "explorer") {
+            values$target_mode_textarea <- input$gene_textarea %||% ""
+            values$target_mode_input_method <- input$gene_input_method %||% "manual"
+            # Restore explorer mode content, but preserve current content if explorer is empty
+            restore_content <- values$explorer_mode_textarea
+            if (restore_content == "" && !is.null(input$gene_textarea) && input$gene_textarea != "") {
+                restore_content <- input$gene_textarea
+            }
+            updateTextAreaInput(session, "gene_textarea", value = restore_content)
+            updateRadioButtons(session, "gene_input_method", selected = values$explorer_mode_input_method)
+        } else if (old_mode == "explorer" && input$app_mode == "target") {
+            values$explorer_mode_textarea <- input$gene_textarea %||% ""
+            values$explorer_mode_input_method <- input$gene_input_method %||% "manual"
+            # Restore target mode content, but preserve current content if target is empty
+            restore_content <- values$target_mode_textarea
+            if (restore_content == "" && !is.null(input$gene_textarea) && input$gene_textarea != "") {
+                restore_content <- input$gene_textarea
+            }
+            updateTextAreaInput(session, "gene_textarea", value = restore_content)
+            updateRadioButtons(session, "gene_input_method", selected = values$target_mode_input_method)
+        }
+        
         values$app_mode <- input$app_mode
     })
     
@@ -511,13 +507,6 @@ server <- function(input, output, session) {
             
             # Store genes list for validation
             values$available_genes <- genes
-            
-            # Initialize validated genes with default gene if it exists
-            if ("SCN11A" %in% genes) {
-                values$validated_genes <- "SCN11A"
-                cat("Initialized validated genes with SCN11A\n")
-            }
-            
             cat("Gene choices updated and validation initialized\n")
         } else {
             cat("Expression data is NULL - gene choices not updated\n")
@@ -536,35 +525,23 @@ server <- function(input, output, session) {
         selected_genes <- NULL
         
         tryCatch({
-            if (input_method == "manual") {
-                textarea_value <- input$gene_textarea %||% ""
-                selected_genes <- parse_gene_input(textarea_value)
-            } else if (input_method == "predefined") {
-                gene_set_name <- input$gene_set_selection %||% ""
-                if (gene_set_name != "" && !is.null(gene_sets) && gene_set_name %in% names(gene_sets)) {
-                    selected_genes <- gene_sets[[gene_set_name]]
-                } else {
-                    # Fall back to textarea if no gene set selected
-                    textarea_value <- input$gene_textarea %||% ""
-                    selected_genes <- parse_gene_input(textarea_value)
-                }
-            } else if (input_method == "upload") {
-                selected_genes <- values$uploaded_genes
-            }
+            # Simplified: always use manual textarea (file uploads are converted to manual text)
+            textarea_value <- input$gene_textarea %||% ""
+            selected_genes <- parse_gene_input(textarea_value)
         }, error = function(e) {
             selected_genes <- NULL
         })
         
         # Filter for genes that exist in the dataset
         if (is.null(selected_genes) || length(selected_genes) == 0) {
-            values$validated_genes <- c("SCN11A")  # fallback to default
+            values$validated_genes <- c("")
             return()
         }
         
         available_genes <- intersect(selected_genes, values$available_genes)
         
         if (length(available_genes) == 0) {
-            values$validated_genes <- c("SCN11A")  # fallback to default
+            values$validated_genes <- c("")
             return()
         }
         
@@ -644,9 +621,15 @@ server <- function(input, output, session) {
     parse_gene_input <- function(text_input) {
         if (is.null(text_input) || text_input == "") return(NULL)
         
-        # Split by common separators: comma, semicolon, newline, tab, space
+        # Split by common separators: comma, semicolon, newline, tab, multiple spaces
+        # Use a more robust regex that handles mixed separators
         genes <- unique(trimws(unlist(strsplit(text_input, "[,;\\n\\t\\s]+"))))
-        genes[genes != ""]  # Remove empty strings
+        genes <- genes[genes != ""]  # Remove empty strings
+        
+        # Convert to uppercase for case-insensitive matching
+        genes <- toupper(genes)
+        
+        return(genes)
     }
 
     # Suggest similar genes for invalid genes only (improved fuzzy matching)
@@ -659,14 +642,14 @@ server <- function(input, output, session) {
             gene_suggestions <- c()
             
             # Method 1: Exact case-insensitive prefix matching (highest priority)
-            prefix_matches <- available_genes[grepl(paste0("^", gene), available_genes, ignore.case = TRUE)]
+            prefix_matches <- available_genes[grepl(paste0("^", toupper(gene)), toupper(available_genes))]
             if (length(prefix_matches) > 0) {
                 gene_suggestions <- c(gene_suggestions, head(prefix_matches, 2))
             }
             
             # Method 2: Contains the entered text (case-insensitive)
             if (length(gene_suggestions) < 3 && nchar(gene) >= 2) {
-                contains_matches <- available_genes[grepl(gene, available_genes, ignore.case = TRUE)]
+                contains_matches <- available_genes[grepl(toupper(gene), toupper(available_genes))]
                 contains_matches <- setdiff(contains_matches, gene_suggestions)  # Remove duplicates
                 if (length(contains_matches) > 0) {
                     gene_suggestions <- c(gene_suggestions, head(contains_matches, 3 - length(gene_suggestions)))
@@ -701,21 +684,9 @@ server <- function(input, output, session) {
         
         # Get genes based on input method
         tryCatch({
-            if (input_method == "manual") {
-                textarea_value <- input$gene_textarea %||% ""
-                genes_entered <- parse_gene_input(textarea_value)
-            } else if (input_method == "predefined") {
-                gene_set_name <- input$gene_set_selection %||% ""
-                if (gene_set_name != "" && !is.null(gene_sets) && gene_set_name %in% names(gene_sets)) {
-                    genes_entered <- gene_sets[[gene_set_name]]
-                } else {
-                    # Fall back to textarea if no gene set selected
-                    textarea_value <- input$gene_textarea %||% ""
-                    genes_entered <- parse_gene_input(textarea_value)
-                }
-            } else if (input_method == "upload") {
-                genes_entered <- values$uploaded_genes
-            }
+            # Simplified: always use manual textarea content
+            textarea_value <- input$gene_textarea %||% ""
+            genes_entered <- parse_gene_input(textarea_value)
         }, error = function(e) {
             genes_entered <- NULL
         })
@@ -770,9 +741,9 @@ server <- function(input, output, session) {
                     ),
                     div(
                         style = "color: #155724;",
-                        paste(head(valid_genes, 8), collapse = ", "),
-                        if (length(valid_genes) > 8) {
-                            paste("... and", length(valid_genes) - 8, "more")
+                        paste(head(valid_genes, 5), collapse = ", "),
+                        if (length(valid_genes) > 5) {
+                            paste("... and", length(valid_genes) - 5, "more")
                         }
                     )
                 )
@@ -851,8 +822,8 @@ server <- function(input, output, session) {
             return(NULL)
         }
         
-        # Calculate pagination with fixed 8 genes per page for target mode
-        genes_per_page <- 8
+        # Calculate pagination with fixed 5 genes per page for target mode
+        genes_per_page <- 5
         total_genes <- length(all_genes)
         start_idx <- (values$gene_page - 1) * genes_per_page + 1
         end_idx <- min(values$gene_page * genes_per_page, total_genes)
@@ -877,7 +848,7 @@ server <- function(input, output, session) {
     observeEvent(input$next_genes, {
         all_genes <- current_genes()
         if (!is.null(all_genes) && length(all_genes) > 0) {
-            genes_per_page <- 8
+            genes_per_page <- 5
             max_pages <- ceiling(length(all_genes) / genes_per_page)
             if (values$gene_page < max_pages) {
                 values$gene_page <- values$gene_page + 1
@@ -938,27 +909,27 @@ server <- function(input, output, session) {
     # Simple pagination info UI
     output$gene_pagination_info <- renderUI({
         all_genes <- current_genes()
-        if (is.null(all_genes) || length(all_genes) <= 8) {
+        if (is.null(all_genes) || length(all_genes) <= 5) {
             return(span("", style = "color: #666;"))
         }
         
-        genes_per_page <- 8
+        genes_per_page <- 5
         total_genes <- length(all_genes)
         max_pages <- ceiling(total_genes / genes_per_page)
         start_idx <- (values$gene_page - 1) * genes_per_page + 1
         end_idx <- min(values$gene_page * genes_per_page, total_genes)
         
         span(
-            paste0("Showing genes ", start_idx, "-", end_idx, " of ", total_genes, 
+            paste0(start_idx, "-", end_idx, " of ", total_genes, 
                    " (Page ", values$gene_page, " of ", max_pages, ")"),
-            style = "color: #666; font-size: 12px;"
+            style = "color: #666; font-size: 10px;"
         )
     })
     
     # Output to control conditional panel for gene navigation
     output$show_gene_pagination <- reactive({
         all_genes <- current_genes()
-        !is.null(all_genes) && length(all_genes) > 8
+        !is.null(all_genes) && length(all_genes) > 5
     })
     outputOptions(output, "show_gene_pagination", suspendWhenHidden = FALSE)
     
@@ -973,25 +944,8 @@ server <- function(input, output, session) {
             ))
         }
         
-        # Determine gene source based on the new radio button system
-        gene_source <- if (!is.null(input$gene_input_method)) {
-            if (input$gene_input_method == "manual") {
-                "Manual entry"
-            } else if (input$gene_input_method == "predefined") {
-                if (!is.null(input$gene_set_selection) && input$gene_set_selection != "") {
-                    input$gene_set_selection
-                } else {
-                    "Predefined gene set"
-                }
-            } else if (input$gene_input_method == "upload") {
-                "Uploaded file"
-            } else {
-                "Unknown source"
-            }
-        } else {
-            # Fallback for legacy mode
-            "Gene selection"
-        }
+        # Determine gene source - simplified since everything is now manual text
+        gene_source <- "Manual entry"
         
         div(
             style = paste0("color: ", app_theme$text_white, "; font-size: ", app_theme$font_size_small, "; margin-bottom: ", app_theme$spacing_sm, ";"),
@@ -1236,7 +1190,7 @@ server <- function(input, output, session) {
         # Create optimized subtitle
         data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
         all_selected_genes <- current_genes()
-        genes_per_page <- 8
+        genes_per_page <- 5
         
         subtitle_parts <- paste0("Data: ", data_type_label)
         
@@ -1288,14 +1242,6 @@ server <- function(input, output, session) {
         # Create plot with minimal processing
         p <- ggplot(plot_data, aes(x = violin_group, y = expression, fill = violin_group, text = paste("Sample:", sample, "<br>Gene:", gene))) +
             geom_boxplot(alpha = 0.7, outlier.shape = NA) +
-            {
-                if (input$show_points) {
-                    geom_jitter(
-                        width = 0.15, height = 0,
-                        size = 1.2, alpha = 0.6, color = app_theme$text_secondary
-                    )
-                }
-            } +
             scale_fill_manual(
                 name = "Sample Group",
                 values = group_colors
@@ -1312,7 +1258,7 @@ server <- function(input, output, session) {
                 legend.position = "bottom",
                 plot.title = element_text(size = plot_theme$title_size, face = "bold", color = plot_theme$text_color),
                 plot.subtitle = element_text(size = plot_theme$subtitle_size, color = app_theme$text_light),
-                axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = plot_theme$axis_text_size, color = plot_theme$text_color),
+                axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8, color = plot_theme$text_color),
                 axis.text.y = element_text(color = plot_theme$text_color),
                 axis.title = element_text(color = plot_theme$text_color),
                 strip.text = element_text(color = plot_theme$text_color, face = "bold"),
@@ -1327,7 +1273,16 @@ server <- function(input, output, session) {
         tryCatch(
             {
                 ggplotly(p, tooltip = c("x", "y", "text")) %>%
-                    layout(showlegend = TRUE) %>%
+                    layout(
+                        showlegend = TRUE,
+                        legend = list(
+                            orientation = "h",   # horizontal orientation
+                            x = 0.5,            # center horizontally
+                            xanchor = 'center', # anchor at center
+                            y = -0.2,           # position below the plot
+                            yanchor = 'top'     # anchor at top of legend
+                        )
+                    ) %>%
                     config(displayModeBar = TRUE, displaylogo = FALSE)
             },
             error = function(e) {
@@ -1341,95 +1296,37 @@ server <- function(input, output, session) {
         )
     })
 
-    # Single gene set heatmap
+    # Single gene set heatmap - now uses target heatmap functionality for explorer mode
     output$gene_set_heatmap <- renderPlotly({
+        req(values$expression_data, values$sample_data, input$data_type)
+        
         # Use unified gene selection
         selected_genes <- current_genes()
         
         if (is.null(selected_genes) || length(selected_genes) == 0) {
-            return(plotly_empty(type = "scatter", mode = "markers") %>%
-                add_annotations(
-                    text = "Select genes or upload a gene set to display heatmap",
-                    showarrow = FALSE
-                ))
+            return(create_empty_plot("Select genes to display heatmap", 
+                                   get_plot_theme(app_theme)))
         }
 
-        # Filter for genes that exist in the dataset
-        available_genes <- intersect(selected_genes, unique(values$expression_data$gene))
+        # For explorer mode, use ALL cell types (same as target mode) - no filtering
+        # This makes it an exact copy of the target mode heatmap
+        enabled_types <- NULL
 
-        if (length(available_genes) == 0) {
-            return(plotly_empty(type = "scatter", mode = "markers") %>%
-                add_annotations(
-                    text = paste("No genes from selection found in dataset"),
-                    showarrow = FALSE
-                ))
-        }
-
-        # Get expression data for selected groups and genes, filtered by data type
-        plot_data_base <- contrast_data()
-
-        if (is.null(plot_data_base)) {
-            return(plotly_empty(type = "scatter", mode = "markers") %>%
-                add_annotations(
-                    text = "Unable to load data for selected groups",
-                    showarrow = FALSE
-                ))
-        }
-
-        heatmap_data <- plot_data_base %>%
-            filter(gene %in% available_genes) %>%
-            group_by(gene, celltype) %>%
-            summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop") %>%
-            pivot_wider(names_from = celltype, values_from = mean_expr, values_fill = 0)
-
-        if (nrow(heatmap_data) == 0) {
-            return(plotly_empty(type = "scatter", mode = "markers") %>%
-                add_annotations(
-                    text = "No expression data available for selected groups",
-                    showarrow = FALSE
-                ))
-        }
-
-        # Prepare matrix for heatmap
-        gene_names <- heatmap_data$gene
-        expr_matrix <- as.matrix(heatmap_data[, -1])
-        rownames(expr_matrix) <- gene_names
-
-        # Create title based on gene source
-        gene_source <- if (input$gene_set_selection == "Custom Genes") {
-            "Custom Gene Selection"
-        } else if (input$gene_set_selection == "Uploaded Gene Set") {
-            "Uploaded Gene Set"
-        } else {
-            input$gene_set_selection
-        }
+        # Create heatmap using the same function as target mode
+        plot <- create_target_heatmap(
+            expression_data = values$expression_data,
+            sample_data = values$sample_data,
+            selected_genes = selected_genes,
+            data_type = input$data_type,
+            plot_theme = list(
+                background = app_theme$background_white,
+                text_color = app_theme$text_primary
+            ),
+            enabled_cell_types = enabled_types,
+            mode = "explorer"
+        )
         
-        data_type_label <- if (input$data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
-        heatmap_title <- paste0(gene_source, " Heatmap (", data_type_label, ")")
-
-        # Create y-axis label based on data type
-        y_axis_subtitle <- if (input$data_type == "log2_cpm") {
-            "Mean log2(CPM + 1)"
-        } else {
-            "Mean VST"
-        }
-
-        # Create plotly heatmap
-        plot_ly(
-            z = expr_matrix,
-            x = colnames(expr_matrix),
-            y = rownames(expr_matrix),
-            type = "heatmap",
-            colorscale = "Viridis",
-            showscale = TRUE,
-            hovertemplate = paste0("Gene: %{y}<br>Group: %{x}<br>", y_axis_subtitle, ": %{z:.2f}<extra></extra>")
-        ) %>%
-            layout(
-                title = heatmap_title,
-                xaxis = list(title = "Cell Type", side = "bottom"),
-                yaxis = list(title = "Genes"),
-                margin = list(l = 100, r = 50, t = 80, b = 50)
-            )
+        return(plot)
     })
 
     # Render dynamic comparison title
@@ -1878,7 +1775,7 @@ server <- function(input, output, session) {
         }
 
         # Define product categories for color coding
-        real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+        real_products <- c("RealDRGx", "RealDRG", "RealMOTO", "RealMELO", "RealDHN", "RealSCP")
         hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
         primary_products <- c("hDRG", "hMelo_1", "hSCP")
 
@@ -2410,7 +2307,8 @@ server <- function(input, output, session) {
                 background = app_theme$background_white,
                 text_color = app_theme$text_primary
             ),
-            enabled_cell_types = enabled_types
+            enabled_cell_types = enabled_types,
+            mode = "target"
         )
         
         return(plot)

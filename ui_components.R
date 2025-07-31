@@ -97,7 +97,7 @@ create_app_sidebar <- function(theme, width = 380) {
         div(
             style = "height: 100%; overflow-y: auto; padding: 10px;",
             h4("Analysis Controls", 
-               style = paste0("margin: 0 0 15px 0; color: ", theme$text_white, "; font-size: 18px; font-weight: bold;")),
+               style = paste0("margin: 0 0 15px 0; color: ", theme$text_white, "; font-size: 18px; font-weight: bold; text-align: center;")), # Added text-align: center
             
             # Server-side rendered controls based on mode
             uiOutput("sidebar_controls")
@@ -105,32 +105,32 @@ create_app_sidebar <- function(theme, width = 380) {
     )
 }
 
-# Simple Gene Selection UI - Completely redesigned for better functionality
+# Gene Selection UI
 create_simple_gene_selection_ui <- function(theme) {
     div(
         class = "gene-selection-container",
-        style = paste0("margin: 10px 0; padding: 15px; background: linear-gradient(135deg, ", 
+        style = paste0("margin: 6px 0; padding: 10px; background: linear-gradient(135deg, ", 
                       theme$primary_dark, " 0%, ", theme$secondary_dark, " 100%); ",
-                      "border-radius: 8px; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"),
+                      "border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 2px 4px rgba(0,0,0,0.1);"), # Reduced margins, padding, and shadows
         
         # Header
         div(
-            style = "margin-bottom: 15px; text-align: center;",
+            style = "margin-bottom: 8px; text-align: center;", # Reduced margin
             h5("🧬 Gene Selection", 
-               style = paste0("color: ", theme$text_white, "; margin: 0; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);"))
+               style = paste0("color: ", theme$text_white, "; margin: 0; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);")) # Smaller font
         ),
         
-        # Gene Set Selection Method - Improved Radio Buttons
+        # Gene Set Selection Method
         div(
-            style = "margin-bottom: 20px; padding: 12px; background-color: rgba(255,255,255,0.08); border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);",
-            h6("Select gene input method:", 
-               style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 14px; font-weight: bold;")),
+            style = "margin-bottom: 12px; padding: 8px; background-color: rgba(255,255,255,0.08); border-radius: 4px; border: 1px solid rgba(255,255,255,0.15);",
+            h6("Input method:", 
+               style = paste0("color: ", theme$text_white, "; margin: 0 0 6px 0; font-size: 12px; font-weight: bold;")),
             
             radioButtons("gene_input_method",
                 NULL,
                 choices = list(
                     "Manual Entry" = "manual",
-                    "Predefined Gene Sets" = "predefined",
+                    # "Predefined Gene Sets" = "predefined",  # DISABLED: Preloaded gene sets
                     "Upload File" = "upload"
                 ),
                 selected = "manual",
@@ -154,75 +154,79 @@ create_simple_gene_selection_ui <- function(theme) {
         conditionalPanel(
             condition = "input.gene_input_method == 'manual'",
             div(
-                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
+                style = "padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);", # Reduced padding
                 h6("Enter gene symbols:", 
-                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
-                p("Separate multiple genes with commas, spaces, or new lines",
-                  style = paste0("color: ", theme$text_light, "; margin: 0 0 8px 0; font-size: 12px; font-style: italic;")),
+                   style = paste0("color: ", theme$text_white, "; margin: 0 0 4px 0; font-size: 12px;")), # Smaller font and margin
+                p("Separate with commas, spaces, or new lines",
+                  style = paste0("color: ", theme$text_light, "; margin: 0 0 6px 0; font-size: 10px; font-style: italic;")), # Smaller text and margin
                 textAreaInput("gene_textarea",
                     NULL,
-                    value = "SCN11A",
-                    placeholder = "Enter gene symbols (e.g., SCN11A, CACNA1A, TRPV1)",
-                    rows = 4,
+                    value = "",
+                    placeholder = "e.g., SCN11A, CACNA1A, TRPV1",
+                    rows = 3,
                     width = "100%"
                 )
             )
         ),
         
-        # Predefined Gene Sets Panel  
-        conditionalPanel(
-            condition = "input.gene_input_method == 'predefined'",
-            div(
-                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
-                h6("Choose from predefined gene sets:", 
-                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
-                
-                # Native reactive gene set dropdown
-                uiOutput("gene_set_dropdown"),
-                
-                # Gene set info display
-                div(id = "gene_set_info",
-                    style = "margin-top: 8px; padding: 8px; background-color: rgba(255,255,255,0.1); border-radius: 4px; min-height: 30px;",
-                    uiOutput("gene_set_info_display")
-                )
-            )
-        ),
+        # Predefined Gene Sets Panel - DISABLED
+        # conditionalPanel(
+        #     condition = "input.gene_input_method == 'predefined'",
+        #     div(
+        #         style = "padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);", # Reduced padding
+        #         h6("Predefined gene sets:", 
+        #            style = paste0("color: ", theme$text_white, "; margin: 0 0 4px 0; font-size: 12px;")), # Smaller font and margin
+        #         
+        #         # Native reactive gene set dropdown
+        #         uiOutput("gene_set_dropdown"),
+        #         
+        #         # Gene set info display
+        #         div(id = "gene_set_info",
+        #             style = "margin-top: 8px; padding: 8px; background-color: rgba(255,255,255,0.1); border-radius: 4px; min-height: 30px;",
+        #             uiOutput("gene_set_info_display")
+        #         )
+        #     )
+        # ),
         
         # File Upload Panel
         conditionalPanel(
             condition = "input.gene_input_method == 'upload'",
             div(
-                style = "padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);",
-                h6("Upload gene list file:", 
-                   style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 13px;")),
-                p("Supported formats: .txt, .csv, .tsv",
-                  style = paste0("color: ", theme$text_light, "; margin: 0 0 8px 0; font-size: 12px; font-style: italic;")),
+                style = "padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);",
+                h6("Upload gene file:", 
+                   style = paste0("color: ", theme$text_white, "; margin: 0 0 4px 0; font-size: 12px;")),
+                p("Formats: .txt, .csv, .tsv",
+                  style = paste0("color: ", theme$text_light, "; margin: 0 0 6px 0; font-size: 10px; font-style: italic;")),
                 
                 div(
-                    style = "border: 2px dashed rgba(255,255,255,0.3); border-radius: 6px; padding: 15px; text-align: center; background-color: rgba(255,255,255,0.02);",
+                    style = "border: 1px dashed rgba(255,255,255,0.3); border-radius: 4px; padding: 6px; text-align: center; background-color: rgba(255,255,255,0.02);",
                     fileInput("gene_file_upload",
                              NULL,
                              accept = c(".txt", ".csv", ".tsv"),
                              width = "100%",
-                             buttonLabel = "📁 Browse Files",
+                             buttonLabel = "📁 Browse",
                              placeholder = "No file selected"
                     )
                 )
             )
         ),
         
-        # VALIDATION PANEL - Enhanced
+        # Validation Panel
+        # TODO shrink gene_validation text size itself
         div(
             id = "gene-validation-panel",
-            style = "margin-top: 15px; padding: 12px; background-color: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;",
-            h6("🔍 Gene Validation Results", 
-               style = paste0("color: ", theme$text_white, "; margin: 0 0 8px 0; font-size: 14px; font-weight: bold;")),
+            style = "margin-top: 8px; padding: 6px 8px; background-color: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;",
+            h6("🔍 Validation", 
+               style = paste0("color: ", theme$text_white, "; margin: 0 0 4px 0; font-size: 8px; font-weight: bold;")),
+            div(
+                style = "font-size: 8px;",
             uiOutput("gene_validation")
+            )
         ),
         
         # Selected genes summary
         div(
-            style = "margin-top: 10px; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border-left: 4px solid #28a745;",
+            style = "margin-top: 6px; padding: 4px 6px; background-color: rgba(255,255,255,0.05); border-radius: 3px; border-left: 3px solid #28a745;",
             uiOutput("selected_genes_display")
         )
     )
@@ -238,8 +242,8 @@ create_gene_selection_inputs <- function(theme) {
                 "gene_textarea",
                 "Gene symbols (comma, space, or line separated):",
                 placeholder = "e.g., SCN11A, CACNA1A, KCNQ1",
-                value = "SCN11A",
-                rows = 5,
+                value = "",
+                rows = 3,
                 width = "100%"
             )
         ),
@@ -255,20 +259,20 @@ create_gene_selection_inputs <- function(theme) {
             )
         ),
         
-        # Gene set selection dropdown
-        div(
-            style = "margin-bottom: 15px; width: 100%;",
-            selectInput("gene_set_selection",
-                "Or choose from predefined gene sets:",
-                choices = c("Custom Genes" = "Custom Genes", "Loading..." = "loading"),
-                selected = "Custom Genes",
-                width = "100%"
-            ),
-            
-            helpText("Select a predefined gene set to populate the text area above.",
-                class = "help-text",
-                style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
-        ),
+        # Gene set selection dropdown - DISABLED
+        # div(
+        #     style = "margin-bottom: 15px; width: 100%;",
+        #     selectInput("gene_set_selection",
+        #         "Or choose from predefined gene sets:",
+        #         choices = c("Custom Genes" = "Custom Genes", "Loading..." = "loading"),
+        #         selected = "Custom Genes",
+        #         width = "100%"
+        #     ),
+        #     
+        #     helpText("Select a predefined gene set to populate the text area above.",
+        #         class = "help-text",
+        #         style = paste0("color: ", theme$text_light, "; font-size: 11px; margin-top: 4px;"))
+        # ),
         
         # File upload option
         div(
@@ -294,64 +298,64 @@ create_gene_selection_inputs <- function(theme) {
     )
 }
 
-# Product grouping selection - improved spacing and readability (Target mode)
+# Product grouping selection
 create_product_grouping_ui <- function(theme) {
     div(
         class = "product-grouping-container",
-        style = "margin: 8px 0; padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);", # Better margins and padding
+        style = "margin: 6px 0; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);", # Reduced margins and padding
         
         h5("Cell Type Selection", 
-           style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 16px; font-weight: bold;")), # Larger header
+           style = paste0("color: ", theme$text_white, "; margin: 0 0 6px 0; font-size: 14px; font-weight: bold;")), # Smaller header and reduced margin
         
-        helpText("Click cell types to enable/disable them for analysis. Real* products are selected by default:",
+        helpText("Click to enable/disable cell types. Real* products selected by default:",
                 class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: 12px; font-size: 12px;")), # Better spacing
+                style = paste0("color: ", theme$text_light, "; margin-bottom: 8px; font-size: 11px;")), # Reduced margin and font size
         
         # Dynamic grouped cell type toggles will be populated by server
         div(
-            style = "margin-bottom: 15px;", # More margin
+            style = "margin-bottom: 8px;", # Reduced margin
             uiOutput("grouped_cell_type_toggles")
         ),
         
-        # Action buttons for group selection - improved sizing and spacing
+        # Action buttons for group selection - more compact
         div(
             class = "group-action-buttons",
-            style = "margin-top: 10px; text-align: center;", # Better margin
+            style = "margin-top: 6px; text-align: center;", # Reduced margin
             
             fluidRow(
                 column(4,
-                    actionButton("select_all_real", "All Real*", 
-                               class = "btn btn-sm btn-outline-primary btn-block", # Changed to btn-sm from btn-xs
-                               style = "font-size: 11px; padding: 6px 8px;") # Better font and padding
+                    actionButton("select_all_real", "Real*", 
+                               class = "btn btn-xs btn-outline-primary btn-block", # Back to btn-xs for compactness
+                               style = "font-size: 10px; padding: 4px 6px;") # Smaller font and padding
                 ),
                 column(4,
-                    actionButton("select_all_types", "Select All", 
-                               class = "btn btn-sm btn-outline-success btn-block", # Changed to btn-sm from btn-xs
-                               style = "font-size: 11px; padding: 6px 8px;") # Better font and padding
+                    actionButton("select_all_types", "All", 
+                               class = "btn btn-xs btn-outline-success btn-block", # Back to btn-xs for compactness
+                               style = "font-size: 10px; padding: 4px 6px;") # Smaller font and padding
                 ),
                 column(4,
-                    actionButton("select_none", "Clear All", 
-                               class = "btn btn-sm btn-outline-secondary btn-block", # Changed to btn-sm from btn-xs
-                               style = "font-size: 11px; padding: 6px 8px;") # Better font and padding
+                    actionButton("select_none", "None", 
+                               class = "btn btn-xs btn-outline-secondary btn-block", # Back to btn-xs for compactness
+                               style = "font-size: 10px; padding: 4px 6px;") # Smaller font and padding
                 )
             )
         )
     )
 }
 
-# Contrast selection UI component (Explorer mode) - improved spacing
+# Contrast selection UI (Explorer mode)
 create_contrast_selection_ui <- function(theme) {
     div(
         class = "contrast-selection-container",
-        style = "margin: 8px 0; padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);", # Better margins and padding
+        style = "margin: 6px 0; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);", # Reduced margins and padding
         
         # Section header
         h5("Group Comparison", 
-           style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 16px; font-weight: bold;")), # Better margin and larger font
+           style = paste0("color: ", theme$text_white, "; margin: 0 0 6px 0; font-size: 14px; font-weight: bold;")), # Smaller header and margin
         
-        helpText("Select two groups to compare expression levels:",
+        helpText("Select two groups to compare:",
                 class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: 12px; font-size: 12px;")), # Better margin and font size
+                style = paste0("color: ", theme$text_light, "; margin-bottom: 8px; font-size: 11px;")), # Reduced text and margin
         
         # Native reactive group dropdowns
         uiOutput("group_comparison_dropdowns")
@@ -362,23 +366,23 @@ create_contrast_selection_ui <- function(theme) {
 # Main Content Components
 # =============================================================================
 
-# Analysis options UI component - improved spacing and readability (shared between modes)
+# Analysis options UI (shared between modes)
 create_analysis_options_ui <- function(theme) {
     div(
         class = "analysis-options-container",
-        style = "margin: 8px 0; padding: 12px; background-color: rgba(255,255,255,0.05); border-radius: 6px; border: 1px solid rgba(255,255,255,0.1);", # Better margins and padding
+        style = "margin: 6px 0; padding: 8px; background-color: rgba(255,255,255,0.05); border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);", # Reduced margins and padding
         
         # Section header
         h5("Analysis Options", 
-           style = paste0("color: ", theme$text_white, "; margin: 0 0 10px 0; font-size: 16px; font-weight: bold;")), # Larger header
+           style = paste0("color: ", theme$text_white, "; margin: 0 0 6px 0; font-size: 14px; font-weight: bold;")), # Smaller header and margin
         
-        helpText("Configure analysis parameters and visualization options:",
+        helpText("Configure analysis parameters:",
                 class = "help-text",
-                style = paste0("color: ", theme$text_light, "; margin-bottom: 12px; font-size: 12px;")), # Better spacing
+                style = paste0("color: ", theme$text_light, "; margin-bottom: 8px; font-size: 11px;")), # Reduced spacing and text
         
-        # Data type selection with proper choices - better spacing
+        # Data type selection with proper choices - compact spacing
         div(
-            style = "margin-bottom: 15px;", # More margin
+            style = "margin-bottom: 8px;", # Reduced margin
             radioButtons("data_type",
                 "Expression Data Type:",
                 choices = list(
@@ -389,17 +393,11 @@ create_analysis_options_ui <- function(theme) {
             )
         ),
         
-        # Plot options - better spacing
-        div(
-            style = "margin-bottom: 15px;", # More margin
-            checkboxInput("show_points", "Show Individual Points", value = TRUE)
-        ),
-        
-        # Download button - improved styling
+        # Download button
         div(
             style = "text-align: center;",
             downloadButton("download_plot", "Download Plot", class = "btn-primary",
-                         style = "font-size: 12px; padding: 8px 16px;") # Better button size
+                         style = "font-size: 12px; padding: 8px 16px;")
         )
     )
 }
@@ -423,12 +421,13 @@ create_unified_expression_plot_box <- function() {
             tabsetPanel(
                 id = "expression_tabs",
                 tabPanel(
-                    "Gene Set Heatmap",
+                    "Expression Matrix",
                     div(
                         style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
                         div(
                             style = "flex-shrink: 0; margin-bottom: 5px;",
-                            helpText("Heatmap of mean expression across selected groups", 
+                            h5("Expression Matrix", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
+                            helpText("A heatmap visualization of gene expression across the Atlas.", 
                                     class = "help-text",
                                     style = "font-size: 12px; margin: 0;")
                         ),
@@ -539,11 +538,11 @@ create_main_layout <- function(theme) {
     )
 }
 
-# Target Mode Layout: [GeneSet Analysis Overview] [Product Portfolio Overview]
+# Target Mode Layout: [Product Portfolio Overview] [GeneSet Analysis Overview]
 create_target_mode_layout <- function() {
     fluidRow(
-        create_geneset_analysis_box(),  # Left: GeneSet expression analysis 
-        create_product_portfolio_overview_box()  # Right: Product portfolio overview
+        create_product_portfolio_overview_box(),  # Left: Product portfolio overview
+        create_geneset_analysis_box()  # Right: GeneSet expression analysis 
     )
 }
 
@@ -580,7 +579,7 @@ create_geneset_analysis_box <- function() {
                         style = "margin-bottom: 6px; padding: 4px 6px; background-color: #f8f9fa; border-radius: 4px; text-align: center; flex-shrink: 0;",
                         fluidRow(
                             column(4,
-                                actionButton("prev_genes", "← Previous 10", 
+                                actionButton("prev_genes", "← Previous 5", 
                                            class = "btn-xs btn-default", 
                                            style = "width: 100%; font-size: 10px; padding: 2px 4px;")
                             ),
@@ -591,7 +590,7 @@ create_geneset_analysis_box <- function() {
                                 )
                             ),
                             column(4,
-                                actionButton("next_genes", "Next 10 →", 
+                                actionButton("next_genes", "Next 5 →", 
                                            class = "btn-xs btn-default",
                                            style = "width: 100%; font-size: 10px; padding: 2px 4px;")
                             )
@@ -606,16 +605,18 @@ create_geneset_analysis_box <- function() {
                 )
             ),
             
-            # Summary Table section - fixed height but optimized with overflow control
+            # Summary Table section - increased height with better overflow control
             div(
                 id = "summary-table-section",
-                style = "flex-shrink: 0; height: 320px; padding: 8px; border-top: 1px solid #dee2e6; overflow: hidden;", # Fixed height for table section with overflow control
+                style = "flex-shrink: 0; height: 400px; padding: 8px; border-top: 1px solid #dee2e6; overflow: hidden;", # Increased height from 320px to 400px
                 h5("Product Expression Summary", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
-                helpText("Detailed statistics for each product showing expression levels and rankings", 
-                        class = "help-text",
-                        style = "font-size: 12px; margin-bottom: 10px;"),
+                helpText(
+                    "Genes with log2(CPM + 1) < 1 are considered low or not expressed. For VST counts, values are variance-stabilized and typically range from ~6 (not expressed) to ~10 (highly expressed).",
+                    class = "help-text",
+                    style = "font-size: 11px; margin-bottom: 8px; color: #888;"
+                ),
                 div(
-                    style = "height: 320px; overflow: hidden;",  # Reduced wrapper container height to match table scrollY
+                    style = "height: calc(100% - 50px); overflow: auto;",  # Improved height calculation and overflow handling
                     DT::dataTableOutput("portfolio_summary_table", height = "100%") %>% withSpinner()
                 )
             )
@@ -655,13 +656,13 @@ create_product_portfolio_overview_box <- function() {
                     )
                 ),
                 tabPanel(
-                    "Target Heatmap",
+                    "Expression Matrix",
                     div(
                         style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
                         div(
                             style = "flex-shrink: 0; margin-bottom: 5px;",
-                            h5("Gene × Product Expression Matrix", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
-                            helpText("Heatmap showing expression of selected genes across Anatomic products", 
+                            h5("Expression Matrix", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
+                            helpText("A heatmap visualization of gene expression across Anatomic products", 
                                     class = "help-text", 
                                     style = "font-size: 12px; margin: 0;")
                         ),

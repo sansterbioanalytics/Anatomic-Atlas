@@ -304,7 +304,7 @@ create_portfolio_ranking_plot <- function(expression_data, sample_data, selected
     }
     
     # Define product categories for visual separation and color coding
-    real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+    real_products <- c("RealDRGx", "RealDRG", "RealMOTO", "RealMELO", "RealDHN", "RealSCP")
     hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
     primary_products <- c("hDRG", "hMelo_1", "hSCP")
     
@@ -406,7 +406,9 @@ create_portfolio_ranking_plot <- function(expression_data, sample_data, selected
             ),
             plot_bgcolor = plot_theme$background,
             paper_bgcolor = plot_theme$background,
-            margin = list(l = 150, r = 50, t = 50, b = 50)
+            margin = list(l = 150, r = 50, t = 60, b = 50),
+            height = 600,
+            autosize = TRUE
         ) %>%
         config(displayModeBar = FALSE)
     
@@ -416,7 +418,7 @@ create_portfolio_ranking_plot <- function(expression_data, sample_data, selected
 # Create target heatmap with genes on X-axis and products on Y-axis
 create_target_heatmap <- function(expression_data, sample_data, selected_genes, 
                                  data_type = "log2_cpm", plot_theme = NULL,
-                                 enabled_cell_types = NULL) {
+                                 enabled_cell_types = NULL, mode = "target") {
     
     if (is.null(selected_genes) || length(selected_genes) == 0) {
         return(create_empty_plot("Select genes to display target heatmap", plot_theme))
@@ -488,8 +490,12 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
     # Create data type label for title and hover
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     
-    # Create title
-    title_text <- paste("Target Heatmap:", data_type_label)
+    # Create title based on mode
+    title_text <- if (mode == "explorer") {
+        paste("Group Comparison Heatmap:", data_type_label)
+    } else {
+        paste("Target Heatmap:", data_type_label)
+    }
     
     # Create the heatmap
     p <- plot_ly(
@@ -500,7 +506,7 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
         colorscale = "Viridis",
         hovertemplate = paste0(
             "<b>Gene:</b> %{x}<br>",
-            "<b>Product:</b> %{y}<br>",
+            "<b>", if (mode == "explorer") "Group" else "Product", ":</b> %{y}<br>",
             "<b>", data_type_label, ":</b> %{z:.3f}<br>",
             "<extra></extra>"
         )
@@ -517,13 +523,15 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
                 tickangle = -45
             ),
             yaxis = list(
-                title = "Anatomic Product",
+                title = if (mode == "explorer") "Cell Type/Group" else "Anatomic Product",
                 titlefont = list(size = 12, color = plot_theme$text_color),
                 tickfont = list(size = 10, color = plot_theme$text_color)
             ),
             plot_bgcolor = plot_theme$background,
             paper_bgcolor = plot_theme$background,
-            margin = list(l = 150, r = 50, t = 80, b = 100)
+            margin = list(l = 150, r = 50, t = 60, b = 120),
+            height = 600,
+            autosize = TRUE
         ) %>%
         config(displayModeBar = TRUE)
     
@@ -583,7 +591,7 @@ create_portfolio_summary_table <- function(expression_data, sample_data, selecte
     }
     
     # Define product categories for visual separation
-    real_products <- c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP")
+    real_products <- c("RealDRGx", "RealDRG", "RealMOTO", "RealMELO", "RealDHN", "RealSCP")
     hipsc_products <- c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2")
     primary_products <- c("hDRG", "hMelo_1", "hSCP")
     

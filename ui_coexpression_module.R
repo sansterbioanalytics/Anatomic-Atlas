@@ -46,7 +46,7 @@ create_coexpression_analysis_box <- function() {
                     ),
                     
                     # Co-expression results
-                    plotlyOutput("coexpression_network", height = "740px") %>% withSpinner(),
+                    plotlyOutput("coexpression_network", height = "600px") %>% withSpinner(),
                     
                     # Progress and log output - compact
                     div(
@@ -221,7 +221,7 @@ create_coexpression_results <- function() {
 create_coexpression_log_panel <- function() {
     div(
         id = "coexpression_log_container",
-        style = "flex: 1; min-height: 300px; overflow-y: auto; border: 1px solid #E9ECEF; border-radius: 4px; padding: 4px; background-color: #F8F9FA; font-size: 10px;",
+        style = "flex: 1; min-height: 300px; max-height: 500px; overflow-y: auto; border: 1px solid #E9ECEF; border-radius: 4px; padding: 4px; background-color: #F8F9FA; font-size: 10px;",
         verbatimTextOutput("coexpression_live_log")
     )
 }

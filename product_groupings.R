@@ -9,27 +9,27 @@
 # Define visual product groupings
 product_groupings <- list(
     
-    # Anatomic's Real* Products
+    # Anatomic's Real* Products - Ordered as requested
     "real_products" = list(
-        name = "Real* Products (Anatomic)",
+        name = "RealCells (Anatomic)",
         description = "Anatomic's proprietary cell line products",
-        cell_types = c("RealDRGx", "RealDRG", "RealMoto", "RealMelo", "RealDHN", "RealSCP"),
+        cell_types = c("RealDRG", "RealDRGx", "RealDHN", "RealMOTO", "RealSCP", "RealMELO"),
         default_enabled = TRUE  # These should be enabled by default
-    ),
-    
-    # hiPSC-derived Products
-    "human_iPSC" = list(
-        name = "Human iPSC", 
-        description = "Human induced pluripotent stem cell-derived products",
-        cell_types = c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2"),
-        default_enabled = FALSE  # These should be disabled by default
     ),
     
     # Human Primary Cell Types
     "human_primary" = list(
-        name = "Human Primary",
+        name = "Primary Human Cells",
         description = "Primary human cell types for comparison",
         cell_types = c("hDRG", "hMelo_1", "hSCP"),
+        default_enabled = FALSE  # These should be disabled by default
+    ),
+    
+    # hiPSC-derived Products
+    "human_iPSC" = list(
+        name = "Other hiPS Cells", 
+        description = "Human induced pluripotent stem cell-derived products",
+        cell_types = c("hiPSCMN", "hiPSCMelo_1", "hiPSCMelo_2"),
         default_enabled = FALSE  # These should be disabled by default
     )
 )
