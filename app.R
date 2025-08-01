@@ -621,10 +621,25 @@ server <- function(input, output, session) {
     parse_gene_input <- function(text_input) {
         if (is.null(text_input) || text_input == "") return(NULL)
         
-        # Split by common separators: comma, semicolon, newline, tab, multiple spaces
-        # Use a more robust regex that handles mixed separators
-        genes <- unique(trimws(unlist(strsplit(text_input, "[,;\\n\\t\\s]+"))))
-        genes <- genes[genes != ""]  # Remove empty strings
+        # Enhanced parsing to handle multiple separator types:
+        # - Whitespace-separated: "GENE1 GENE2 GENE3"
+        # - Comma-separated: "GENE1, GENE2, GENE3" or "GENE1,GENE2,GENE3"
+        # - Newline-separated: "GENE1\nGENE2\nGENE3"
+        # - Mixed separators: "GENE1, GENE2\nGENE3 GENE4"
+        
+        # First, replace common separators with a consistent separator
+        # Handle comma + optional whitespace
+        text_input <- gsub(",\\s*", " ", text_input)
+        # Handle semicolon + optional whitespace
+        text_input <- gsub(";\\s*", " ", text_input)
+        # Handle newlines and tabs
+        text_input <- gsub("[\\n\\r\\t]+", " ", text_input)
+        # Handle multiple whitespace characters
+        text_input <- gsub("\\s+", " ", text_input)
+        
+        # Split by single space and clean up
+        genes <- unique(trimws(unlist(strsplit(text_input, "\\s+"))))
+        genes <- genes[genes != "" & !is.na(genes)]  # Remove empty strings and NA values
         
         # Convert to uppercase for case-insensitive matching
         genes <- toupper(genes)
