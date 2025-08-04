@@ -104,8 +104,11 @@ ui <- dashboardPage(
         # Main content layout
         create_main_layout(app_theme),
         
-        # Bottom section layout
-        create_bottom_layout()
+        # Bottom section layout - only show in target mode
+        conditionalPanel(
+            condition = "input.app_mode == 'target'",
+            create_bottom_layout()
+        )
     )
 )
 

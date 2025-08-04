@@ -413,47 +413,48 @@ create_unified_expression_plot_box <- function() {
         status = "primary",
         solidHeader = TRUE,
         width = 12,  # Full width to match expression data table
-        height = "900px",
+        height = "800px", # Use full available height
+        style = "margin: 0;", # Remove default margins
         
         # Use flexbox to fill available height
         div(
-            style = "height: calc(100% - 50px);", # Account for box header
+            style = "height: 750px; overflow: hidden;", # Direct height instead of calc
             tabsetPanel(
                 id = "expression_tabs",
                 tabPanel(
                     "Expression Matrix",
                     div(
-                        style = "padding: 4px; height: 100%; display: flex; flex-direction: column; overflow: hidden;",
+                        style = "height: 720px; display: flex; flex-direction: column; overflow: hidden; padding: 2px;", # Direct height
                         div(
-                            style = "flex-shrink: 0; margin-bottom: 5px;",
-                            h5("Expression Matrix", style = "margin: 0 0 5px 0; font-weight: bold; font-size: 14px;"),
+                            style = "flex-shrink: 0; margin-bottom: 2px;", # Minimal margin
+                            h5("Expression Matrix", style = "margin: 0 0 2px 0; font-weight: bold; font-size: 14px;"),
                             helpText("A heatmap visualization of gene expression across the Atlas.", 
                                     class = "help-text",
-                                    style = "font-size: 12px; margin: 0;")
+                                    style = "font-size: 10px; margin: 0;") # Smaller font
                         ),
                         div(
-                            style = "flex: 1; min-height: 600px;",
-                            plotlyOutput("gene_set_heatmap", height = "100%") %>% withSpinner()
+                            style = "flex: 1; height: 670px; min-height: 670px;", # Reduced height to prevent overflow
+                            plotlyOutput("gene_set_heatmap", height = "670px") %>% withSpinner() # Reduced height
                         )
                     )
                 ),
                 tabPanel(
                     "Co-Expression Analysis",
                     div(
-                        style = "padding: 8px; height: 100%; overflow: hidden;",
+                        style = "height: 720px; overflow: hidden; padding: 2px;", # Direct height
                         fluidRow(
-                            style = "height: 100%;",
+                            style = "height: 100%; margin: 0;",
                             column(
                                 width = 4,
                                 wellPanel(
-                                    style = "padding: 12px; height: 100%; overflow-y: auto; margin: 0;",
+                                    style = "height: 710px; padding: 6px; margin: 0; overflow-y: auto;", # Reduced height to match results
                                     create_coexpression_controls()
                                 )
                             ),
                             column(
                                 width = 8,
                                 div(
-                                    style = "height: 100%; padding-left: 15px; overflow: hidden;",
+                                    style = "height: 710px; padding-left: 8px; overflow: hidden;", # Reduced height to match results
                                     create_coexpression_results()
                                 )
                             )
@@ -548,8 +549,9 @@ create_target_mode_layout <- function() {
 
 # Explorer Mode Layout: [Expression Plot] [Co-Expression Analysis] - BETA
 create_explorer_mode_layout <- function() {
-    fluidRow(
-        create_unified_expression_plot_box(),  # Left: Unified expression plot
+    div(
+        style = "height: 800px; overflow: hidden; margin: 0; padding: 0;", # Fixed height container with no margins
+        create_unified_expression_plot_box()  # Full width expression plot
     )
 }
 
@@ -611,13 +613,13 @@ create_geneset_analysis_box <- function() {
                 style = "flex-shrink: 0; height: 400px; padding: 8px; border-top: 1px solid #dee2e6; overflow: hidden;", # Increased height from 320px to 400px
                 h5("Product Expression Summary", style = "margin: 0 0 10px 0; font-weight: bold; font-size: 14px;"),
                 helpText(
-                    "Genes with log2(CPM + 1) < 1 are considered low or not expressed. For VST counts, values are variance-stabilized and typically range from ~6 (not expressed) to ~10 (highly expressed).",
+                    "Genes with log2(CPM + 1) < 1 are considered low or not expressed. For VST counts, values are variance-stabilized and typically range from ~6 (not expressed) to >10 (highly expressed).",
                     class = "help-text",
                     style = "font-size: 11px; margin-bottom: 8px; color: #888;"
                 ),
                 div(
                     style = "height: calc(100% - 50px); overflow: auto;",  # Improved height calculation and overflow handling
-                    DT::dataTableOutput("portfolio_summary_table", height = "100%") %>% withSpinner()
+                    DT::dataTableOutput("portfolio_summary_table", height = "90%") %>% withSpinner()
                 )
             )
         )
