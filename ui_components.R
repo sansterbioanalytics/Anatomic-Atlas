@@ -558,7 +558,7 @@ create_explorer_mode_layout <- function() {
 # GeneSet Analysis box - optimized expression distribution boxplot with full height utilization
 create_geneset_analysis_box <- function() {
     box(
-        title = "GeneSet Expression Analysis",
+        title = "Expression Distribution",
         status = "primary",
         solidHeader = TRUE,
         width = 6,
@@ -618,8 +618,8 @@ create_geneset_analysis_box <- function() {
                     style = "font-size: 11px; margin-bottom: 8px; color: #888;"
                 ),
                 div(
-                    style = "height: calc(100% - 50px); overflow: auto;",  # Improved height calculation and overflow handling
-                    DT::dataTableOutput("portfolio_summary_table", height = "90%") %>% withSpinner()
+                    style = "height: calc(100% - 50px); overflow-y: auto;",
+                    DT::dataTableOutput("portfolio_summary_table", height = "340px") %>% withSpinner()
                 )
             )
         )
