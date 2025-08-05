@@ -418,7 +418,9 @@ create_portfolio_ranking_plot <- function(expression_data, sample_data, selected
 # Create target heatmap with genes on X-axis and products on Y-axis
 create_target_heatmap <- function(expression_data, sample_data, selected_genes, 
                                  data_type = "log2_cpm", plot_theme = NULL,
-                                 enabled_cell_types = NULL, mode = "target") {
+                                 enabled_cell_types = NULL, mode = "target",
+                                 cluster_genes = FALSE, cluster_method = "complete",
+                                 highlight_genes = NULL, highlight_color = "#DC143C") {
     
     if (is.null(selected_genes) || length(selected_genes) == 0) {
         return(create_empty_plot("Select genes to display target heatmap", plot_theme))
@@ -492,14 +494,46 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
     celltype_order <- order(celltype_means, decreasing = FALSE)
     heatmap_matrix <- heatmap_matrix[celltype_order, , drop = FALSE]
     
+    # Optional gene clustering - cluster genes by similar expression patterns
+    if (cluster_genes && ncol(heatmap_matrix) > 2) {
+        tryCatch({
+            # Transpose matrix so genes are rows for clustering
+            gene_matrix <- t(heatmap_matrix)
+            
+            # Calculate distance matrix between genes
+            gene_dist <- dist(gene_matrix, method = "euclidean")
+            
+            # Perform hierarchical clustering
+            gene_clust <- hclust(gene_dist, method = cluster_method)
+            
+            # Reorder genes based on clustering
+            gene_order <- gene_clust$order
+            heatmap_matrix <- heatmap_matrix[, gene_order, drop = FALSE]
+            
+            cat("Applied gene clustering using", cluster_method, "method\n")
+        }, error = function(e) {
+            warning("Gene clustering failed, using original gene order: ", e$message)
+        })
+    }
+    
     # Create data type label for title and hover
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     
     # Create title based on mode
     title_text <- if (mode == "explorer") {
         paste("Group Comparison Heatmap:", data_type_label)
+    } else if (mode == "coexpression") {
+        if (cluster_genes) {
+            paste("Co-Expression Heatmap (Clustered):", data_type_label)
+        } else {
+            paste("Co-Expression Heatmap:", data_type_label)
+        }
     } else {
-        paste("Target Heatmap:", data_type_label)
+        if (cluster_genes) {
+            paste("Target Heatmap (Clustered):", data_type_label)
+        } else {
+            paste("Target Heatmap:", data_type_label)
+        }
     }
     
     # Create the heatmap
@@ -539,6 +573,36 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
             autosize = TRUE
         ) %>%
         config(displayModeBar = TRUE)
+    
+    # Add highlighting for special genes if provided
+    if (!is.null(highlight_genes) && length(highlight_genes) > 0) {
+        # Find which genes in the heatmap are highlighted
+        highlighted_genes_in_plot <- intersect(highlight_genes, colnames(heatmap_matrix))
+        
+        if (length(highlighted_genes_in_plot) > 0) {
+            # Add annotations to highlight query genes with colored text
+            for (highlighted_gene in highlighted_genes_in_plot) {
+                gene_pos <- match(highlighted_gene, colnames(heatmap_matrix)) - 1  # 0-indexed for plotly
+                
+                p <- p %>% add_annotations(
+                    x = gene_pos,
+                    y = -0.15,  # Just below x-axis
+                    xref = "x",
+                    yref = "paper",
+                    text = paste0("★", highlighted_gene),  # Add star symbol
+                    showarrow = FALSE,
+                    font = list(
+                        color = highlight_color,
+                        size = 9,
+                        family = "Arial Black"
+                    ),
+                    bgcolor = "rgba(255,255,255,0.8)",
+                    bordercolor = highlight_color,
+                    borderwidth = 1
+                )
+            }
+        }
+    }
     
     return(p)
 }
