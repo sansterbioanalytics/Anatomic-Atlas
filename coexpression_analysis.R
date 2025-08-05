@@ -929,12 +929,25 @@ find_coexpressed_genes_streaming_parallel <- function(expr_filtered, available_q
 create_coexpression_heatmap <- function(expression_data, query_genes, similar_genes, 
                                       data_type = "log2_cpm", sample_metadata = NULL) {
     
-    # Combine query and similar genes
-    all_genes <- c(query_genes, similar_genes)
+    # Ensure query genes are always included, even if not in similar_genes
+    all_genes <- unique(c(query_genes, similar_genes))
     
     # Filter expression data
     expr_data <- expression_data %>%
         filter(gene %in% all_genes, data_type == !!data_type)
+    
+    # Check if any query genes are missing from expression data and warn
+    missing_query_genes <- setdiff(query_genes, expr_data$gene)
+    if (length(missing_query_genes) > 0) {
+        cat("Warning: Query genes not found in expression data:", paste(missing_query_genes, collapse = ", "), "\n")
+    }
+    
+    # Ensure we have at least the query genes that exist in the data
+    available_query_genes <- intersect(query_genes, expr_data$gene)
+    if (length(available_query_genes) == 0) {
+        cat("Error: No query genes found in expression data\n")
+        return(NULL)
+    }
     
     if (nrow(expr_data) == 0) {
         return(NULL)
@@ -984,49 +997,108 @@ create_coexpression_heatmap <- function(expression_data, query_genes, similar_ge
             select(gene, All_Samples)
     }
     
-    # Convert to matrix
-    gene_names <- heatmap_data$gene
-    expr_matrix <- as.matrix(heatmap_data[, -1])
-    rownames(expr_matrix) <- gene_names
+    # Ensure all query genes are present in the heatmap data
+    missing_query_genes <- setdiff(available_query_genes, heatmap_data$gene)
+    if (length(missing_query_genes) > 0) {
+        # Add missing query genes with zero expression
+        missing_data <- data.frame(gene = missing_query_genes)
+        # Add zero values for all cell types
+        for (col in setdiff(names(heatmap_data), "gene")) {
+            missing_data[[col]] <- 0
+        }
+        heatmap_data <- bind_rows(heatmap_data, missing_data)
+    }
     
-    # Create gene type annotations (query vs similar)
-    gene_types <- ifelse(gene_names %in% query_genes, "Query Gene", "Similar Gene")
+    # Convert to matrix and order genes: query genes first, then similar genes
+    gene_names <- heatmap_data$gene
+    
+    # Ensure ALL available query genes are prioritized and included
+    available_query_genes <- intersect(query_genes, gene_names)
+    
+    # Get similar genes, but exclude any that might overlap with query genes
+    available_similar_genes <- intersect(similar_genes, gene_names)
+    available_similar_genes <- setdiff(available_similar_genes, available_query_genes)
+    
+    # Create ordered gene list: ALL query genes first, then similar genes
+    ordered_genes <- c(available_query_genes, available_similar_genes)
+    
+    # Ensure we're not losing any query genes in the filtering
+    cat("Including", length(available_query_genes), "query genes and", length(available_similar_genes), "similar genes in heatmap\n")
+    
+    # Reorder heatmap data to match the gene ordering
+    heatmap_data <- heatmap_data %>%
+        filter(gene %in% ordered_genes) %>%  # Only include genes that should be displayed
+        slice(match(ordered_genes, gene))
+    
+    # Convert to matrix (genes as rows, cell types as columns)
+    final_gene_names <- heatmap_data$gene
+    expr_matrix <- as.matrix(heatmap_data[, -1])
+    rownames(expr_matrix) <- final_gene_names
+    
+    # Sort cell types/columns by mean expression (highest to lowest)
+    if (ncol(expr_matrix) > 1) {
+        celltype_means <- colMeans(expr_matrix, na.rm = TRUE)
+        celltype_order <- order(celltype_means, decreasing = FALSE)
+        expr_matrix <- expr_matrix[, celltype_order, drop = FALSE]
+    }
+    
+    # Create gene type annotations based on final gene list
+    gene_types <- ifelse(final_gene_names %in% query_genes, "Query Gene", "Similar Gene")
+    
+    # Verify query genes are present in final matrix
+    final_query_genes <- intersect(query_genes, final_gene_names)
+    final_similar_genes <- setdiff(final_gene_names, final_query_genes)
+    
+    cat("Final heatmap contains", length(final_query_genes), "query genes and", length(final_similar_genes), "similar genes\n")
     
     # Create data type label
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     
-    # Create y-axis labels with color coding for query genes
-    y_labels <- paste0(rownames(expr_matrix), " (", gene_types, ")")
-    y_colors <- ifelse(gene_names %in% query_genes, "#DC143C", "#4A4A4A")  # Red for query genes, gray for similar genes
+    # Create gene labels with type annotations
+    gene_labels <- paste0(rownames(expr_matrix), " (", gene_types, ")")
     
     # Create plotly heatmap
     plot_ly(
         z = expr_matrix,
-        x = colnames(expr_matrix),
-        y = y_labels,
+        x = colnames(expr_matrix),  # Cell types on X-axis
+        y = gene_labels,           # Genes with annotations on Y-axis
         type = "heatmap",
         colorscale = "Viridis",
         showscale = TRUE,
-        hovertemplate = paste0("Gene: %{y}<br>Group: %{x}<br>", data_type_label, ": %{z:.2f}<extra></extra>")
+        hovertemplate = paste0(
+            "<b>Gene:</b> %{y}<br>",
+            "<b>Cell Type:</b> %{x}<br>",
+            "<b>", data_type_label, ":</b> %{z:.3f}<br>",
+            "<extra></extra>"
+        ),
+        customdata = rownames(expr_matrix)  # Pass actual gene names for hover
     ) %>%
         layout(
-            title = paste("Co-Expression Heatmap:", length(query_genes), "Query +", 
-                         length(similar_genes), "Similar Genes"),
+            title = list(
+                text = paste("Co-Expression Heatmap:", length(final_query_genes), "Query +", 
+                           length(final_similar_genes), "Similar Genes"),
+                font = list(size = 14)
+            ),
             xaxis = list(
                 title = "Cell Types", 
                 side = "bottom",
                 tickangle = -90,  # Rotate x-axis labels 90 degrees
-                tickfont = list(size = 10)
+                tickfont = list(size = 10),
+                titlefont = list(size = 12)
             ),
             yaxis = list(
                 title = "Genes",
-                tickfont = list(
-                    size = 10,
-                    color = y_colors  # Color-code y-axis labels
-                )
+                tickfont = list(size = 8),  # Smaller font for better fit
+                titlefont = list(size = 12),
+                # Use categorical axis to preserve exact gene order
+                type = "category",
+                categoryorder = "array",
+                categoryarray = rev(gene_labels),  # Reverse to match plotly's bottom-to-top ordering
+                side = "left"  # Ensure labels are on the left
             ),
-            margin = list(l = 200, r = 50, t = 80, b = 120),  # Increased bottom margin for rotated labels
-            font = list(size = 10)
+            margin = list(l = 150, r = 50, t = 60, b = 100),  # Reduced left margin with smaller font
+            font = list(size = 9),
+            height = 600  # Fixed height for consistent display
         )
 }
 

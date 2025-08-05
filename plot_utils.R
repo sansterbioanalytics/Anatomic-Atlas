@@ -487,6 +487,11 @@ create_target_heatmap <- function(expression_data, sample_data, selected_genes,
         column_to_rownames("celltype") %>%
         as.matrix()
     
+    # Sort cell types by average expression across all genes (highest to lowest)
+    celltype_means <- rowMeans(heatmap_matrix, na.rm = TRUE)
+    celltype_order <- order(celltype_means, decreasing = FALSE)
+    heatmap_matrix <- heatmap_matrix[celltype_order, , drop = FALSE]
+    
     # Create data type label for title and hover
     data_type_label <- if (data_type == "log2_cpm") "log2(CPM + 1)" else "VST"
     

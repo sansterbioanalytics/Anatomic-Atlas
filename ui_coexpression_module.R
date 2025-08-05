@@ -125,15 +125,6 @@ create_coexpression_controls <- function() {
                         max = 2000,
                         step = 100
                     )
-                ),
-                column(6,
-                    div(
-                        style = "margin-top: 25px;",
-                        checkboxInput("use_parallel",
-                            "Parallel processing",
-                            value = FALSE
-                        )
-                    )
                 )
             ),
             

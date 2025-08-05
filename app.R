@@ -2374,7 +2374,6 @@ server <- function(input, output, session) {
         add_coexpression_log(paste("Parameters: min_correlation =", input$min_correlation_coexpr, 
                                   ", n_similar =", input$n_similar_genes, 
                                   ", batch_size =", input$max_genes_batch))
-        add_coexpression_log(paste("Using parallel processing:", input$use_parallel))
         add_coexpression_log(paste("Data type:", input$coexpression_data_type))
         
         # Get dataset info for progress message
@@ -2394,7 +2393,7 @@ server <- function(input, output, session) {
                 min_correlation = input$min_correlation_coexpr %||% 0.6,
                 data_type = input$coexpression_data_type,
                 max_genes_batch = input$max_genes_batch %||% 1000,
-                use_parallel = input$use_parallel %||% FALSE,
+                use_parallel = FALSE,  # Disable parallel processing
                 log_func = add_coexpression_log
             )
         }, error = function(e) {
